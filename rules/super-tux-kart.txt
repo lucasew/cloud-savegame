@@ -1,0 +1,4 @@
+addons_installed $appdata/supertuxkart/addons/addons_installed.xml
+highscore $appdata/supertuxkart/config-0.10/highscore.xml
+players $appdata/supertuxkart/config-0.10/players.xml
+server_config $appdata/supertuxkart/config-0.10/server_config.xml

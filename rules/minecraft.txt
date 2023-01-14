@@ -1,0 +1,3 @@
+saves $appdata/Roaming/.minecraft/saves
+mods $appdata/Roaming/.minecraft/mods
+screenshots $appdata/Roaming/.minecraft/screenshots
