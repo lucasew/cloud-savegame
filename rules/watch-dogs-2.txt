@@ -1,0 +1,2 @@
+screenshots $documents/WatchDogs2/Watch_Dogs 2/LocalStorage0/
+saves $documents/WatchDogs2/CPY_SAVES
