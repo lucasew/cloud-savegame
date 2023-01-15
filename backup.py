@@ -5,6 +5,7 @@ from pprint import pprint
 import os
 import re
 from distutils import dir_util, file_util
+import sys
 
 config = ConfigParser()
 config['general'] = {}
@@ -43,12 +44,12 @@ def get_paths(section: str, key: str):
         ret.append(Path(os.path.expanduser(p)).resolve())
     return ret
 
-print(args)
-print(config)
-pprint({section: dict(config[section]) for section in config.sections()})
+# print(args)
+# print(config)
+# pprint({section: dict(config[section]) for section in config.sections()})
 
-print(get_paths('eoq', 'trabson'))
-print(get_paths('search', 'paths'))
+# print(get_paths('eoq', 'trabson'))
+# print(get_paths('search', 'paths'))
 
 apps = set()
 required_vars = {}
@@ -62,7 +63,7 @@ def parse_rules(app: str):
             parts = rule.split(' ')
             rule_name = parts[0]
             rule_path = " ".join(parts[1:])
-            print('rule', rule_name, rule_path)
+            # print('rule', rule_name, rule_path)
             yield rule_name, rule_path
 
 # load rules
@@ -83,10 +84,10 @@ for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
                 var_users[var] = set()
             var_users[var].add(appname)
 
-pprint(apps)
-pprint(required_vars)
-pprint(all_vars)
-pprint(var_users)
+# pprint(apps)
+# pprint(required_vars)
+# pprint(all_vars)
+# pprint(var_users)
 
 def ingest_path(app: str, rule_name: str, path: Path):
     ppath = Path(path)
@@ -94,11 +95,13 @@ def ingest_path(app: str, rule_name: str, path: Path):
     output_dir.mkdir(exist_ok=True, parents=True)
     if ppath.exists():
         if ppath.is_dir():
-            print("Copying folder ", str(path), "...")
+            sys.stdout.write(f"Copying folder {str(path)}...")
             dir_util.copy_tree(str(path), str(output_dir), update=1, verbose=1)
+            sys.stdout.write(" OK\n")
         else:
-            print("Copying file ", str(path), "...")
+            sys.stdout.write(f"Copying file {str(path)}...")
             file_util.copy_file(str(path), str(output_dir), update=1, verbose=1)
+            sys.stdout.write(" OK\n")
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
@@ -113,20 +116,28 @@ for game in var_users['installdir']:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
 
-for search_path in get_paths('search', 'paths'):
-    for appdata in search_path.glob('**/AppData'):
-        homedir = appdata.parents[0]
-        for game in var_users.get('home') or []:
-            for rule_name, rule_path in parse_rules(game):
-                resolved_rule_path = rule_path.replace('$home', str(homedir.resolve()))
-                if rule_path == resolved_rule_path:
-                    continue
-                ingest_path(game, rule_name, resolved_rule_path)
-        for game in var_users['appdata']:
-            appdata = homedir / "AppData"
-            for rule_name, rule_path in parse_rules(game):
-                resolved_rule_path = rule_path.replace('$appdata', str(appdata.resolve()))
-                if rule_path == resolved_rule_path:
-                    continue
-                ingest_path(game, rule_name, resolved_rule_path)
+def get_homes():
+    extra_homes = get_paths('search', 'extra_homes')
+    if extra_homes is not None:
+        for home in extra_homes:
+            yield home
+    for search_path in get_paths('search', 'paths'):
+        for appdata in search_path.glob('**/AppData'):
+            yield appdata.parents[0]
+
+for homedir in get_homes():
+    appdata = homedir / "AppData"
+    for game in var_users.get('home') or []:
+        for rule_name, rule_path in parse_rules(game):
+            resolved_rule_path = rule_path.replace('$home', str(homedir.resolve()))
+            if rule_path == resolved_rule_path:
+                continue
+            ingest_path(game, rule_name, resolved_rule_path)
+    for game in var_users['appdata']:
+        appdata = homedir / "AppData"
+        for rule_name, rule_path in parse_rules(game):
+            resolved_rule_path = rule_path.replace('$appdata', str(appdata.resolve()))
+            if rule_path == resolved_rule_path:
+                continue
+            ingest_path(game, rule_name, resolved_rule_path)
 
