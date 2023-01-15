@@ -60,7 +60,12 @@ def git(*params):
     if args.git:
         git_bin = which("git")
         assert git_bin is not None, "git is not installed"
-        subprocess.call([git_bin, *params])
+        stdout = subprocess.DEVNULL
+        stderr = subprocess.DEVNULL
+        if args.verbose:
+            stdout = subprocess.PIPE
+            stderr = subprocess.PIPE
+        subprocess.call([git_bin, *params], stdout=stdout, stderr=stderr)
 
 os.chdir(str(args.output))
 if args.git:
@@ -193,3 +198,5 @@ for homedir in get_homes():
                 ingest_path(game, rule_name, resolved_rule_path)
 
 
+if args.git:
+    git("push")
