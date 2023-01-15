@@ -1,0 +1,7 @@
+mods $documents/My Games/FarmingSimulator2019/mods/
+music_radios $documents/My Games/FarmingSimulator2019/music/streamingInternetRadios.xml
+saves $documents/My Games/FarmingSimulator2019/savegame*
+screenshots $documents/My Games/FarmingSimulator2019/screenshots
+game_settings $documents/My Games/FarmingSimulator2019/gameSettings.xml
+input_settings $documents/My Games/FarmingSimulator2019/inputBinding.xml
+VERSION $documents/My Games/FarmingSimulator2019/VERSION

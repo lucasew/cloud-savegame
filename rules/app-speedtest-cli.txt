@@ -1,0 +1,1 @@
+settings $appdata/Roaming/Ookla/Speedtest CLI/speedtest-cli.ini
