@@ -105,6 +105,8 @@ def ingest_path(app: str, rule_name: str, path: str):
         if args.verbose:
             print(f"glob ingest path='{path}'")
         for item in parent.glob(filename):
+            if item.is_dir():
+                rule_name = str(Path(rule_name) / item.name)
             ingest_path(app, rule_name, item)
     elif ppath.exists():
         if ppath.is_dir():
