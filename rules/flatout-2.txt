@@ -1,1 +1,2 @@
 data $installdir/Savegame
+data $documents/Flatout2/Savegame/

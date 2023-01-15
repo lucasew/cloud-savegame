@@ -1,3 +1,2 @@
-saves $home/Documents/My Games/Skyrim Special Edition/Saves
-saves $home/Documentos/My Games/Skyrim Special Edition/Saves
+saves $documents/My Games/Skyrim Special Edition/Saves
 saves $appdata/Local/Skyrim Special Edition/Saves

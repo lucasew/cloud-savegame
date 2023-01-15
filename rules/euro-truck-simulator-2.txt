@@ -1,0 +1,5 @@
+editor $documents/Euro Truck Simulator 2/editor/
+mods $documents/Euro Truck Simulator 2/mod/
+saves $documents/Euro Truck Simulator 2/profiles/
+screenshots $documents/Euro Truck Simulator 2/screenshot/
+config $documents/Euro Truck Simulator 2/config.cfg
