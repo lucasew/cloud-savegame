@@ -1,2 +1,3 @@
-saves $home/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Saves/
+saves $home/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Saves
 saves $appdata/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Saves
+

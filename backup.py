@@ -17,6 +17,7 @@ parser = ArgumentParser(prog='cloud-savegame', description='Backs up games saved
 
 parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=Path(__file__).parents[0] / "demo.cfg")
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
+parser.add_argument('-v', '--verbose', type=bool, help="Give more detail about what is happening")
 
 
 args = parser.parse_args()
@@ -48,10 +49,10 @@ def get_paths(section: str, key: str):
 
 # print(args)
 # print(config)
-# pprint({section: dict(config[section]) for section in config.sections()})
 
-# print(get_paths('eoq', 'trabson'))
-# print(get_paths('search', 'paths'))
+if args.verbose:
+    print("parsed config file:")
+    pprint({section: dict(config[section]) for section in config.sections()})
 
 apps = set()
 required_vars = {}
@@ -59,14 +60,14 @@ var_users = {}
 all_vars = set()
 
 def parse_rules(app: str):
-    with (Path(__file__).parents[0] / "rules" / f"{app}.txt").open() as f:
-        rule = f.readline().strip()
+    for line in (Path(__file__).parents[0] / "rules" / f"{app}.txt").read_text().split('\n'):
+        rule = line.strip()
         if len(rule) > 0:
             parts = rule.split(' ')
             rule_name = parts[0]
             rule_path = " ".join(parts[1:])
             # print('rule', rule_name, rule_path)
-            yield rule_name, rule_path
+            yield rule_name.strip(), rule_path.strip()
 
 # load rules
 for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
@@ -86,14 +87,16 @@ for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
                 var_users[var] = set()
             var_users[var].add(appname)
 
-# pprint(apps)
-# pprint(required_vars)
-# pprint(all_vars)
-# pprint(var_users)
+if args.verbose:
+    print("all apps with rules loaded: ", apps)
+    print("all variables mentioned in rules: ", all_vars)
 
-def ingest_path(app: str, rule_name: str, path: Path):
+def ingest_path(app: str, rule_name: str, path: str):
+    # path = str(path).strip()
     ppath = Path(path)
     output_dir = args.output / app / rule_name
+    if args.verbose:
+        print(f"ingest '{str(path)}' '{str(output_dir)}'")
     output_dir.mkdir(exist_ok=True, parents=True)
     if ppath.exists():
         if ppath.is_dir():
@@ -122,12 +125,17 @@ def get_homes():
     extra_homes = get_paths('search', 'extra_homes')
     if extra_homes is not None:
         for home in extra_homes:
-            yield home
+            if not home.exists():
+                print(f"Warning: extra home '{str(home)}' does not exist")
+            else:
+                yield home
     for search_path in get_paths('search', 'paths'):
         for appdata in search_path.glob('**/AppData'):
             yield appdata.parents[0]
 
 for homedir in get_homes():
+    if args.verbose:
+        print(f"Looking for stuff in {str(homedir)}")
     appdata = homedir / "AppData"
     for game in var_users.get('home') or []:
         for rule_name, rule_path in parse_rules(game):
