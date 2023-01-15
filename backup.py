@@ -54,18 +54,17 @@ if args.verbose:
     print("parsed config file:")
     pprint({section: dict(config[section]) for section in config.sections()})
 
-def git(*params):
+def git(*params, always_show=False):
     import subprocess
     from shutil import which
     if args.git:
         git_bin = which("git")
         assert git_bin is not None, "git is not installed"
-        stdout = subprocess.DEVNULL
-        stderr = subprocess.DEVNULL
-        if args.verbose:
-            stdout = subprocess.PIPE
-            stderr = subprocess.PIPE
-        subprocess.call([git_bin, *params], stdout=stdout, stderr=stderr)
+        kwargs=dict()
+        if not (args.verbose or always_show):
+            kwargs['stdout'] = subprocess.DEVNULL
+            kwargs['stderr'] = subprocess.DEVNULL
+        subprocess.call([git_bin, *params], **kwargs)
 
 os.chdir(str(args.output))
 if args.git:
@@ -198,5 +197,4 @@ for homedir in get_homes():
                 ingest_path(game, rule_name, resolved_rule_path)
 
 
-if args.git:
-    git("push")
+git("push", always_show=True)
