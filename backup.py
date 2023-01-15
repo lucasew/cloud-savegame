@@ -92,13 +92,21 @@ if args.verbose:
     print("all variables mentioned in rules: ", all_vars)
 
 def ingest_path(app: str, rule_name: str, path: str):
-    # path = str(path).strip()
+    path = str(path)
     ppath = Path(path)
     output_dir = args.output / app / rule_name
     if args.verbose:
         print(f"ingest '{str(path)}' '{str(output_dir)}'")
     output_dir.mkdir(exist_ok=True, parents=True)
-    if ppath.exists():
+    if "*" in path:
+        filename = ppath.name
+        parent = ppath.parent
+        assert "*" not in str(parent), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
+        if args.verbose:
+            print(f"glob ingest path='{path}'")
+        for item in parent.glob(filename):
+            ingest_path(app, rule_name, item)
+    elif ppath.exists():
         if ppath.is_dir():
             sys.stdout.write(f"Copying folder {str(path)}...")
             dir_util.copy_tree(str(path), str(output_dir), update=1, verbose=1)
@@ -143,6 +151,7 @@ for homedir in get_homes():
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
+
     for game in var_users['appdata']:
         appdata = homedir / "AppData"
         for rule_name, rule_path in parse_rules(game):
@@ -150,4 +159,16 @@ for homedir in get_homes():
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
+
+    for documents_candidate in [ "Documentos", "Documents" ]:
+        documents = homedir / documents_candidate
+        if not documents.exists():
+            continue
+        for game in var_users['documents']:
+            for rule_name, rule_path in parse_rules(game):
+                resolved_rule_path = rule_path.replace('$documents', str(documents.resolve()))
+                if rule_path == resolved_rule_path:
+                    continue
+                ingest_path(game, rule_name, resolved_rule_path)
+
 
