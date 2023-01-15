@@ -18,7 +18,7 @@ parser = ArgumentParser(prog='cloud-savegame', description='Backs up games saved
 parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=Path(__file__).parents[0] / "demo.cfg")
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
 parser.add_argument('-v', '--verbose', type=bool, help="Give more detail about what is happening")
-
+parser.add_argument('-g', '--git', type=bool, help="Use git for snapshot")
 
 args = parser.parse_args()
 
@@ -53,6 +53,19 @@ def get_paths(section: str, key: str):
 if args.verbose:
     print("parsed config file:")
     pprint({section: dict(config[section]) for section in config.sections()})
+
+def git(*params):
+    import subprocess
+    from shutil import which
+    if args.git:
+        git_bin = which("git")
+        assert git_bin is not None, "git is not installed"
+        subprocess.call([git_bin, *params])
+
+os.chdir(str(args.output))
+if args.git:
+    if not (args.output / ".git").exists():
+        git("init", "--initial-branch", "master")
 
 apps = set()
 required_vars = {}
@@ -105,19 +118,25 @@ def ingest_path(app: str, rule_name: str, path: str):
         if args.verbose:
             print(f"glob ingest path='{path}'")
         for item in parent.glob(filename):
+            new_rule_name = rule_name
             if item.is_dir():
-                rule_name = str(Path(rule_name) / item.name)
-            ingest_path(app, rule_name, item)
+                new_rule_name = str(Path(new_rule_name) / item.name)
+            ingest_path(app, new_rule_name, item)
     elif ppath.exists():
         if ppath.is_dir():
             sys.stdout.write(f"Copying folder {str(path)}...")
             dir_util.copy_tree(str(path), str(output_dir), update=1, verbose=1)
-            sys.stdout.write(" OK\n")
+            sys.stdout.write(" OK")
         else:
             sys.stdout.write(f"Copying file {str(path)}...")
             file_util.copy_file(str(path), str(output_dir), update=1, verbose=1)
-            sys.stdout.write(" OK\n")
-
+            sys.stdout.write(" OK")
+        if args.git:
+            commit = f"app={app} rule={rule_name} path={path}"
+            git("add", "-A")
+            git("commit", "-m", commit)
+            sys.stdout.write(" COMMIT")
+        sys.stdout.write("\n")
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
     if game_install_dirs is None:
