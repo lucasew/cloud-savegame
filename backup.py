@@ -11,7 +11,7 @@ config = ConfigParser()
 config['general'] = {}
 config['general']['divider'] = ','
 
-parser = ArgumentParser(prog='gamebkp', description='Backs up games saved data')
+parser = ArgumentParser(prog='cloud-savegame', description='Backs up games saved data')
 
 parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=Path(__file__).parents[0] / "demo.cfg")
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
