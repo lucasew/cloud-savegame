@@ -77,6 +77,7 @@ os.chdir(str(args.output))
 if args.git:
     if not (args.output / ".git").exists():
         git("init", "--initial-branch", "master")
+    git("pull")
 
 apps = set()
 required_vars = {}
