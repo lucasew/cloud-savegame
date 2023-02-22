@@ -17,8 +17,8 @@ parser = ArgumentParser(prog='cloud-savegame', description='Backs up games saved
 
 parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=Path(__file__).parents[0] / "demo.cfg")
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
-parser.add_argument('-v', '--verbose', type=bool, help="Give more detail about what is happening")
-parser.add_argument('-g', '--git', type=bool, help="Use git for snapshot")
+parser.add_argument('-v', '--verbose', help="Give more detail about what is happening", action='store_true')
+parser.add_argument('-g', '--git', help="Use git for snapshot", action='store_true')
 
 args = parser.parse_args()
 
@@ -36,16 +36,23 @@ def get_str(section: str, key: str):
         return None
     return config[section][key]
 
-def get_paths(section: str, key: str):
-    ret = []
+def get_list(section: str, key: str):
     divider = get_str('general', 'divider')
     raw = get_str(section, key) or ''
     raw = raw.strip()
     if len(raw) == 0:
         return None
-    for p in raw.split(divider):
+    return list(raw.split(divider))
+
+
+def get_paths(section: str, key: str):
+    ret = []
+    for p in get_list(section, key) or []:
         ret.append(Path(os.path.expanduser(p)).resolve())
     return ret
+
+def get_bool(section: str, key: str):
+    return get_str(section, key) is not None
 
 # print(args)
 # print(config)
@@ -82,11 +89,14 @@ def parse_rules(app: str):
         if len(rule) > 0:
             parts = rule.split(' ')
             rule_name = parts[0]
+            if get_bool(app, f"ignore_{rule_name}"):
+                continue
             rule_path = " ".join(parts[1:])
             # print('rule', rule_name, rule_path)
             yield rule_name.strip(), rule_path.strip()
 
 # load rules
+rules_amount = 0
 for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
     appname = rulefile.stem
     required_vars[appname] = set()
@@ -103,8 +113,10 @@ for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
             if var_users.get(var) is None:
                 var_users[var] = set()
             var_users[var].add(appname)
+        rules_amount += 1
 
 if args.verbose:
+    print(f"loaded {rules_amount} rules for {len(apps)} apps")
     print("all apps with rules loaded: ", apps)
     print("all variables mentioned in rules: ", all_vars)
 
@@ -141,6 +153,7 @@ def ingest_path(app: str, rule_name: str, path: str):
             git("commit", "-m", commit)
             sys.stdout.write(" COMMIT")
         sys.stdout.write("\n")
+
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
     if game_install_dirs is None:
