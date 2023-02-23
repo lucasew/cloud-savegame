@@ -15,6 +15,7 @@ config['general'] = {}
 config['general']['divider'] = ','
 
 DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
+RULES_DIR = Path(__file__).parents[0] / "rules"
 
 parser = ArgumentParser(
     formatter_class=ArgumentDefaultsHelpFormatter,
@@ -106,7 +107,7 @@ var_users = {}
 all_vars = set()
 
 def parse_rules(app: str):
-    for line in (Path(__file__).parents[0] / "rules" / f"{app}.txt").read_text().split('\n'):
+    for line in (RULES_DIR / f"{app}.txt").read_text().split('\n'):
         rule = line.strip()
         if len(rule) > 0:
             parts = rule.split(' ')
@@ -119,7 +120,7 @@ def parse_rules(app: str):
 
 # load rules
 rules_amount = 0
-for rulefile in (Path(__file__).parents[0] / "rules").glob('*.txt'):
+for rulefile in RULES_DIR.glob('*.txt'):
     appname = rulefile.stem
     required_vars[appname] = set()
     apps.add(appname)
