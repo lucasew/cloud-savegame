@@ -254,3 +254,4 @@ for homedir in get_homes():
 
 
 git("push", always_show=True)
+print("Done!")
