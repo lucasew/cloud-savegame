@@ -140,6 +140,17 @@ if args.verbose:
     print("all apps with rules loaded: ", apps)
     print("all variables mentioned in rules: ", all_vars)
 
+def copy_item(input_item, destination):
+    from shutil import copytree, copyfile
+    if input_item.is_dir():
+        sys.stdout.write(f"Copying folder {str(input_item)}...")
+        dir_util.copy_tree(str(input_item), str(destination), update=1, verbose=1)
+    else:
+        sys.stdout.write(f"Copying file {str(input_item)}...")
+        file_util.copy_file(str(input_item), str(destination), update=1, verbose=1)
+    sys.stdout.write(" OK")
+
+
 def ingest_path(app: str, rule_name: str, path: str):
     path = str(path)
     ppath = Path(path)
@@ -159,14 +170,7 @@ def ingest_path(app: str, rule_name: str, path: str):
                 new_rule_name = str(Path(new_rule_name) / item.name)
             ingest_path(app, new_rule_name, item)
     elif ppath.exists():
-        if ppath.is_dir():
-            sys.stdout.write(f"Copying folder {str(path)}...")
-            dir_util.copy_tree(str(path), str(output_dir), update=1, verbose=1)
-            sys.stdout.write(" OK")
-        else:
-            sys.stdout.write(f"Copying file {str(path)}...")
-            file_util.copy_file(str(path), str(output_dir), update=1, verbose=1)
-            sys.stdout.write(" OK")
+        copy_item(ppath, output_dir)
         if args.git:
             commit = f"app={app} rule={rule_name} path={path}"
             git("add", "-A")
