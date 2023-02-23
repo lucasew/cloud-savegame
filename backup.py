@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from configparser import ConfigParser
 from pprint import pprint
 import os
@@ -15,9 +15,15 @@ config = ConfigParser()
 config['general'] = {}
 config['general']['divider'] = ','
 
-parser = ArgumentParser(prog='cloud-savegame', description='Backs up games saved data')
+DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
 
-parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=Path(__file__).parents[0] / "demo.cfg")
+parser = ArgumentParser(
+    formatter_class=ArgumentDefaultsHelpFormatter,
+    prog='cloud-savegame',
+    description='Backs up games saved data'
+)
+
+parser.add_argument('-c', '--config', type=Path, help="Configuration file to be used by the application", default=DEFAULT_CONFIG_FILE)
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
 parser.add_argument('-v', '--verbose', help="Give more detail about what is happening", action='store_true')
 parser.add_argument('-g', '--git', help="Use git for snapshot", action='store_true')
