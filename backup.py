@@ -8,6 +8,8 @@ import os
 import re
 from distutils import dir_util, file_util
 import sys
+from shutil import which
+import subprocess
 
 config = ConfigParser()
 config['general'] = {}
@@ -61,11 +63,9 @@ if args.verbose:
     print("parsed config file:")
     pprint({section: dict(config[section]) for section in config.sections()})
 
+git_bin = which("git")
 def git(*params, always_show=False):
-    import subprocess
-    from shutil import which
     if args.git:
-        git_bin = which("git")
         assert git_bin is not None, "git is not installed"
         kwargs=dict()
         if not (args.verbose or always_show):
@@ -74,10 +74,22 @@ def git(*params, always_show=False):
         subprocess.call([git_bin, *params], **kwargs)
 
 os.chdir(str(args.output))
+
 if args.git:
+    from subprocess import Popen
     if not (args.output / ".git").exists():
         git("init", "--initial-branch", "master")
+    is_repo_initially_dirty = False
+    status_result = subprocess.run(['git', 'status', '-s'], capture_output=True, text=True)
+    assert status_result.stdout is not None
+    if len(status_result.stdout) > 0:
+        is_repo_initially_dirty = True
+        git("add", "-A")
+        git("stash", "push")
     git("pull")
+    if is_repo_initially_dirty:
+        git("stash", "pop")
+        git("commit", "-m", "dirty repo state")
 
 apps = set()
 required_vars = {}
