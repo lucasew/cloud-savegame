@@ -89,6 +89,7 @@ if args.git:
     git("pull")
     if is_repo_initially_dirty:
         git("stash", "pop")
+        git("add", "-A")
         git("commit", "-m", "dirty repo state")
 
 apps = set()
