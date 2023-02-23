@@ -6,7 +6,6 @@ from configparser import ConfigParser
 from pprint import pprint
 import os
 import re
-from distutils import dir_util, file_util
 import sys
 from shutil import which
 import subprocess
@@ -77,7 +76,13 @@ def git(*params, always_show=False):
         if not (args.verbose or always_show):
             kwargs['stdout'] = subprocess.DEVNULL
             kwargs['stderr'] = subprocess.DEVNULL
+        print("git: %s" %(" ".join(map(lambda p: f"'{p}'", params))))
         subprocess.call([git_bin, *params], **kwargs)
+
+def git_is_repo_dirty():
+    status_result = subprocess.run(['git', 'status', '-s'], capture_output=True, text=True)
+    assert status_result.stdout is not None
+    return len(status_result.stdout) > 0
 
 os.chdir(str(args.output))
 
@@ -85,11 +90,8 @@ if args.git:
     from subprocess import Popen
     if not (args.output / ".git").exists():
         git("init", "--initial-branch", "master")
-    is_repo_initially_dirty = False
-    status_result = subprocess.run(['git', 'status', '-s'], capture_output=True, text=True)
-    assert status_result.stdout is not None
-    if len(status_result.stdout) > 0:
-        is_repo_initially_dirty = True
+    is_repo_initially_dirty = git_is_repo_dirty()
+    if is_repo_initially_dirty:
         git("add", "-A")
         git("stash", "push")
     git("pull")
@@ -140,23 +142,38 @@ if args.verbose:
     print("all apps with rules loaded: ", apps)
     print("all variables mentioned in rules: ", all_vars)
 
-def copy_item(input_item, destination):
-    from shutil import copytree, copyfile
+def copy_item(input_item, destination, depth=0):
+    from shutil import copyfile
+    input_item = Path(input_item)
+    destination = Path(destination)
+    if not input_item.exists():
+        return
+    if str(input_item).startswith(str(args.output)):
+        if args.verbose:
+            print((""*depth) + f"Not copying '{input_item}': Origin is inside output")
+        return
+    if input_item.is_file() or input_item.is_symlink():
+        destination.parent.mkdir(exist_ok=True, parents=True)
+        if destination.is_dir():
+            destination = destination / input_item.name
+        if destination.exists():
+            if (input_item.stat().st_mtime < destination.stat().st_mtime):
+                if args.verbose:
+                    print((""*depth) + f"Not copying '{input_item}': Didn't change")
+                return
+        print((" "*depth) + f"Copying '{input_item}' to '{destination}'")
+        copyfile(input_item, destination)
+        return
     if input_item.is_dir():
-        sys.stdout.write(f"Copying folder {str(input_item)}...")
-        dir_util.copy_tree(str(input_item), str(destination), update=1, verbose=1)
-    else:
-        sys.stdout.write(f"Copying file {str(input_item)}...")
-        file_util.copy_file(str(input_item), str(destination), update=1, verbose=1)
-    sys.stdout.write(" OK")
+        destination.mkdir(exist_ok=True, parents=True)
+        for item in map(lambda x: x.name, input_item.iterdir()):
+            copy_item(input_item / item, destination / item, depth=depth+1)
 
 
 def ingest_path(app: str, rule_name: str, path: str):
     path = str(path)
     ppath = Path(path)
     output_dir = args.output / app / rule_name
-    if args.verbose:
-        print(f"ingest '{str(path)}' '{str(output_dir)}'")
     output_dir.mkdir(exist_ok=True, parents=True)
     if "*" in path:
         filename = ppath.name
@@ -170,13 +187,14 @@ def ingest_path(app: str, rule_name: str, path: str):
                 new_rule_name = str(Path(new_rule_name) / item.name)
             ingest_path(app, new_rule_name, item)
     elif ppath.exists():
+        if args.verbose:
+            print(f"ingest '{str(path)}' '{str(output_dir)}'")
         copy_item(ppath, output_dir)
         if args.git:
-            commit = f"app={app} rule={rule_name} path={path}"
-            git("add", "-A")
-            git("commit", "-m", commit)
-            sys.stdout.write(" COMMIT")
-        sys.stdout.write("\n")
+            if git_is_repo_dirty():
+                commit = f"app={app} rule={rule_name} path={path}"
+                git("add", "-A")
+                git("commit", "-m", commit)
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
