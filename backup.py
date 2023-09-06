@@ -9,6 +9,7 @@ import re
 import sys
 from shutil import which
 import subprocess
+import itertools
 
 config = ConfigParser()
 config['general'] = {}
@@ -58,7 +59,7 @@ def get_paths(section: str, key: str):
     ret = []
     for p in get_list(section, key) or []:
         ret.append(Path(os.path.expanduser(p)).resolve())
-    return ret
+    return set(ret)
 
 def get_bool(section: str, key: str):
     return get_str(section, key) is not None
@@ -264,6 +265,22 @@ for game in var_users['installdir']:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
 
+def search_for_homes(start_dir, patterns=[".config", "AppData"], max_depth=9):
+    if max_depth > 0 or not start_dir.is_dir() or is_path_ignored(start_dir):
+        print(start_dir)
+        return
+    try:
+        for pattern in patterns:
+            if (start_dir / pattern).exists():
+                yield start_dir
+                break
+        for item in start_dir.iterdir():
+            for home in search_for_homes(item, max_depth=max_depth - 1):
+                yield home
+    except PermissionError:
+        return
+
+
 def get_homes():
     extra_homes = get_paths('search', 'extra_homes')
     if extra_homes is not None:
@@ -275,15 +292,14 @@ def get_homes():
             else:
                 yield home
     for search_path in get_paths('search', 'paths'):
-        for appdata in search_path.glob('**/AppData'):
-            yield appdata.parents[0]
+        for home in search_for_homes(search_path):
+            yield home
 
 for homedir in get_homes():
     if is_path_ignored(homedir):
         continue
     if args.verbose:
         print(f"Looking for stuff in {str(homedir)}")
-    appdata = homedir / "AppData"
     for game in var_users.get('home') or []:
         for rule_name, rule_path in parse_rules(game):
             resolved_rule_path = rule_path.replace('$home', str(homedir.resolve()))
