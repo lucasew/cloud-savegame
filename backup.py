@@ -62,6 +62,13 @@ def get_paths(section: str, key: str):
 def get_bool(section: str, key: str):
     return get_str(section, key) is not None
 
+def get_hostname():
+    import socket
+    return socket.gethostname()
+hostname = get_hostname()
+
+ignored_paths = get_paths('search', 'ignore')
+
 # print(args)
 # print(config)
 
@@ -167,8 +174,8 @@ def copy_item(input_item, destination, depth=0):
             copyfile(input_item, destination)
         elif input_item.is_symlink():
             final_path = input_item.resolve()
-            if not str(final_path).startswith(str(destination)):
-                print(f"Symlink '{input_item}' doesn't point to a item inside repo path")
+            if not str(final_path).startswith(str(args.output)):
+                print(f"Symlink '{final_path}' doesn't point to a item inside repo path")
         return
     if input_item.is_dir():
         destination.mkdir(exist_ok=True, parents=True)
@@ -176,7 +183,11 @@ def copy_item(input_item, destination, depth=0):
             copy_item(input_item / item, destination / item, depth=depth+1)
 
 
-def ingest_path(app: str, rule_name: str, path: str):
+def ingest_path(app: str, rule_name: str, path: str, top_level=False):
+    for ignored in ignored_paths:
+        if path.startswith(ignored):
+            print(f"Path ignored: {path}")
+            return
     path = str(path)
     ppath = Path(path)
     output_dir = args.output / app / rule_name
@@ -191,16 +202,19 @@ def ingest_path(app: str, rule_name: str, path: str):
             new_rule_name = rule_name
             if item.is_dir():
                 new_rule_name = str(Path(new_rule_name) / item.name)
-            ingest_path(app, new_rule_name, item)
+            ingest_path(app, new_rule_name, item, top_level=True)
     elif ppath.exists():
         if args.verbose:
             print(f"ingest '{str(path)}' '{str(output_dir)}'")
+        top_level = True
         copy_item(ppath, output_dir)
         if args.git:
             if git_is_repo_dirty():
-                commit = f"app={app} rule={rule_name} path={path}"
+                commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
                 git("add", "-A")
                 git("commit", "-m", commit)
+    if top_level:
+        print("TOPLEVEL: ", top_level, app, rule_name, path)
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
