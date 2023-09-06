@@ -27,6 +27,7 @@ parser.add_argument('-c', '--config', type=Path, help="Configuration file to be 
 parser.add_argument('-o', '--output', type=Path, help="Which folder to copy backed up files", required=True)
 parser.add_argument('-v', '--verbose', help="Give more detail about what is happening", action='store_true')
 parser.add_argument('-g', '--git', help="Use git for snapshot", action='store_true')
+parser.add_argument('-b', '--backlink', help="Create symlinks at the origin pointing to the repo", action='store_true')
 
 args = parser.parse_args()
 
@@ -66,6 +67,17 @@ def get_hostname():
     import socket
     return socket.gethostname()
 hostname = get_hostname()
+
+def delete(item: Path):
+    from shutil import rmtree
+    item = Path(item)
+    item_new = item.parent / f"REMOVE.{item.name}"
+    item.rename(item_new)
+    print("RM: ", item)
+    if item_new.is_dir():
+        rmtree(str(item_new))
+    else:
+        item_new.unlink(missing_ok=True)
 
 ignored_paths = get_paths('search', 'ignore')
 
@@ -182,23 +194,33 @@ def copy_item(input_item, destination, depth=0):
         for item in map(lambda x: x.name, input_item.iterdir()):
             copy_item(input_item / item, destination / item, depth=depth+1)
 
+def is_path_ignored(path):
+    for ignored in ignored_paths:
+        if str(path).startswith(str(ignored)):
+            print(f"Path ignored: {path}")
+            return True
+    return False
+
+
 
 def ingest_path(app: str, rule_name: str, path: str, top_level=False):
-    for ignored in ignored_paths:
-        if path.startswith(ignored):
-            print(f"Path ignored: {path}")
-            return
+    if is_path_ignored(path):
+        return
     path = str(path)
     ppath = Path(path)
     output_dir = args.output / app / rule_name
-    output_dir.mkdir(exist_ok=True, parents=True)
+    if not output_dir.exists():
+        output_dir.mkdir(exist_ok=True, parents=True)
     if "*" in path:
+        top_level = False
         filename = ppath.name
         parent = ppath.parent
         assert "*" not in str(parent), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
         if args.verbose:
             print(f"glob ingest path='{path}'")
-        for item in parent.glob(filename):
+        names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
+        for name in names:
+            item = parent / name
             new_rule_name = rule_name
             if item.is_dir():
                 new_rule_name = str(Path(new_rule_name) / item.name)
@@ -207,14 +229,25 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
         if args.verbose:
             print(f"ingest '{str(path)}' '{str(output_dir)}'")
         top_level = True
-        copy_item(ppath, output_dir)
-        if args.git:
-            if git_is_repo_dirty():
-                commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
-                git("add", "-A")
-                git("commit", "-m", commit)
-    if top_level:
-        print("TOPLEVEL: ", top_level, app, rule_name, path)
+        if not ppath.is_symlink():
+            copy_item(ppath, output_dir)
+            if args.git:
+                if git_is_repo_dirty():
+                    commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
+                    git("add", "-A")
+                    git("commit", "-m", commit)
+        # backlink logic
+    if args.backlink and top_level:
+        # print(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
+        ppath.parent.mkdir(parents=True, exist_ok=True)
+        if ppath.is_symlink():
+            ppath.unlink()  # recreate
+        elif ppath.exists():
+            delete(ppath)
+        if output_dir.name != ppath.name:
+            output_dir = output_dir / ppath.name
+        print(f"ln {ppath} -> {output_dir}")
+        ppath.symlink_to(output_dir)
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
@@ -223,6 +256,8 @@ for game in var_users['installdir']:
             print(f"installdir missing for game {game}, please add it in the game configuration section or set anything to not_installed to disable this warning")
         continue
     for game_install_dir in game_install_dirs:
+        if is_path_ignored(game_install_dir):
+            continue
         for rule_name, rule_path in parse_rules(game):
             resolved_rule_path = rule_path.replace('$installdir', str(game_install_dir.resolve()))
             if rule_path == resolved_rule_path:
@@ -233,6 +268,8 @@ def get_homes():
     extra_homes = get_paths('search', 'extra_homes')
     if extra_homes is not None:
         for home in extra_homes:
+            if is_path_ignored(home):
+                continue
             if not home.exists():
                 print(f"Warning: extra home '{str(home)}' does not exist")
             else:
@@ -242,6 +279,8 @@ def get_homes():
             yield appdata.parents[0]
 
 for homedir in get_homes():
+    if is_path_ignored(homedir):
+        continue
     if args.verbose:
         print(f"Looking for stuff in {str(homedir)}")
     appdata = homedir / "AppData"

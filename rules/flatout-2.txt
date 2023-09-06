@@ -1,2 +1,2 @@
-data $installdir/Savegame
-data $documents/Flatout2/Savegame/
+data $installdir/Savegame/*
+data $documents/Flatout2/Savegame/*
