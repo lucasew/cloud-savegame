@@ -265,9 +265,21 @@ for game in var_users['installdir']:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
 
-def search_for_homes(start_dir, patterns=[".config", "AppData"], max_depth=9):
-    if max_depth > 0 or not start_dir.is_dir() or is_path_ignored(start_dir):
-        print(start_dir)
+def search_for_homes(
+        start_dir,
+        patterns=[".config", "AppData"],
+        ignore_patterns=["dosdevices", "nixpkgs", ".git", ".cache"],
+        max_depth=9
+):
+    if max_depth <= 0:
+        return
+    if start_dir.is_symlink():
+        return
+    if not start_dir.is_dir():
+        return
+    if is_path_ignored(start_dir):
+        return
+    if start_dir.name in ignore_patterns:
         return
     try:
         for pattern in patterns:
@@ -302,7 +314,7 @@ for homedir in get_homes():
         print(f"Looking for stuff in {str(homedir)}")
     for game in var_users.get('home') or []:
         for rule_name, rule_path in parse_rules(game):
-            resolved_rule_path = rule_path.replace('$home', str(homedir.resolve()))
+            resolved_rule_path = rule_path.replace('$home', str(homedir))
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
@@ -310,7 +322,7 @@ for homedir in get_homes():
     for game in var_users['appdata']:
         appdata = homedir / "AppData"
         for rule_name, rule_path in parse_rules(game):
-            resolved_rule_path = rule_path.replace('$appdata', str(appdata.resolve()))
+            resolved_rule_path = rule_path.replace('$appdata', str(appdata))
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
@@ -321,7 +333,7 @@ for homedir in get_homes():
             continue
         for game in var_users['documents']:
             for rule_name, rule_path in parse_rules(game):
-                resolved_rule_path = rule_path.replace('$documents', str(documents.resolve()))
+                resolved_rule_path = rule_path.replace('$documents', str(documents))
                 if rule_path == resolved_rule_path:
                     continue
                 ingest_path(game, rule_name, resolved_rule_path)
