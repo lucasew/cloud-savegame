@@ -163,7 +163,12 @@ def copy_item(input_item, destination, depth=0):
                     print((""*depth) + f"Not copying '{input_item}': Didn't change")
                 return
         print((" "*depth) + f"Copying '{input_item}' to '{destination}'")
-        copyfile(input_item, destination)
+        if input_item.is_file():
+            copyfile(input_item, destination)
+        elif input_item.is_symlink():
+            final_path = input_item.resolve()
+            if not str(final_path).startswith(str(destination)):
+                print(f"Symlink '{input_item}' doesn't point to a item inside repo path")
         return
     if input_item.is_dir():
         destination.mkdir(exist_ok=True, parents=True)
