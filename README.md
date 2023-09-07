@@ -107,7 +107,8 @@ have installdir specified in the configuration file for the rule to work.
 ## FAQ
 
 > Why Python?
-It doesn't give me headaches, I flow very well, it's pragmatic AF and not slow enough to make me angry.
+
+It doesn't give me headaches, I flow very well, it's pragmatic and simple AF and not slow enough to make me angry.
 
 And also, as I did it with only the standard library, it's easier to distribute.
 
@@ -117,5 +118,6 @@ load so deliver quickly then optimize on demand.
 I WILL NOT REWRITE THIS IN RUST.
 
 > Why this exsits?
+
 Steam cloud is cool, works with many games but not all. And with Jack Sparrow games you are on your own ¯\_(ツ)_/¯.
 
