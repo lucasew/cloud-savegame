@@ -18,6 +18,10 @@ config['general']['divider'] = ','
 DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
 RULES_DIR = Path(__file__).parents[0] / "rules"
 
+HOMEFINDER_FIND_FOLDERS = [ ".config", "AppData" ]
+HOMEFINDER_IGNORE_FOLDERS = ["dosdevices", "nixpkgs", ".git", ".cache"]
+HOMEFINDER_DOCUMENTS_FOLDER = [ "Documentos", "Documents" ];
+
 parser = ArgumentParser(
     formatter_class=ArgumentDefaultsHelpFormatter,
     prog='cloud-savegame',
@@ -39,14 +43,17 @@ if not args.output.exists():
 
 config.read(args.config)
 
-def get_str(section: str, key: str):
+"""
+Config file helpers
+"""
+def get_str(section: str, key: str) -> Optional[str]:
     if not section in config:
         return None
     if not key in config[section]:
         return None
     return config[section][key]
 
-def get_list(section: str, key: str):
+def get_list(section: str, key: str) -> Optional[List[str]]:
     divider = get_str('general', 'divider')
     raw = get_str(section, key) or ''
     raw = raw.strip()
@@ -64,12 +71,18 @@ def get_paths(section: str, key: str):
 def get_bool(section: str, key: str):
     return get_str(section, key) is not None
 
-def get_hostname():
+def get_hostname() -> str:
+    """
+    Get hostname of this machine to report it in the commit
+    """
     import socket
     return socket.gethostname()
 hostname = get_hostname()
 
 def delete(item: Path):
+    """
+    Delete either a file or a folder
+    """
     from shutil import rmtree
     item = Path(item)
     item_new = item.parent / f"REMOVE.{item.name}"
@@ -90,7 +103,13 @@ if args.verbose:
     pprint({section: dict(config[section]) for section in config.sections()})
 
 git_bin = which("git")
-def git(*params, always_show=False):
+
+def git(*params, always_show=False) -> None:
+    """
+    Run git with the parameters if it's enabled
+
+    Noop if git is disabled
+    """
     if args.git:
         assert git_bin is not None, "git is not installed"
         kwargs=dict()
@@ -100,7 +119,10 @@ def git(*params, always_show=False):
         print("git: %s" %(" ".join(map(lambda p: f"'{p}'", params))))
         subprocess.call([git_bin, *params], **kwargs)
 
-def git_is_repo_dirty():
+def git_is_repo_dirty() -> bool:
+    """
+    Is the Git repo with uncommited files?
+    """
     status_result = subprocess.run(['git', 'status', '-s'], capture_output=True, text=True)
     assert status_result.stdout is not None
     return len(status_result.stdout) > 0
@@ -119,7 +141,7 @@ if args.git:
     if is_repo_initially_dirty:
         git("stash", "pop")
         git("add", "-A")
-        git("commit", "-m", "dirty repo state")
+        git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
 apps = set()
 required_vars = {}
@@ -127,6 +149,9 @@ var_users = {}
 all_vars = set()
 
 def parse_rules(app: str):
+    """
+    Parse rules from one app
+    """
     for line in (RULES_DIR / f"{app}.txt").read_text().split('\n'):
         rule = line.strip()
         if len(rule) > 0:
@@ -164,6 +189,9 @@ if args.verbose:
     print("all variables mentioned in rules: ", all_vars)
 
 def copy_item(input_item, destination, depth=0):
+    """
+    Copy either a file or a folder from source to destination
+    """
     from shutil import copyfile
     input_item = Path(input_item)
     destination = Path(destination)
@@ -195,7 +223,10 @@ def copy_item(input_item, destination, depth=0):
         for item in map(lambda x: x.name, input_item.iterdir()):
             copy_item(input_item / item, destination / item, depth=depth+1)
 
-def is_path_ignored(path):
+def is_path_ignored(path) -> bool:
+    """
+    Is the path in the list of ignored paths?
+    """
     for ignored in ignored_paths:
         if str(path).startswith(str(ignored)):
             print(f"Path ignored: {path}")
@@ -205,6 +236,11 @@ def is_path_ignored(path):
 
 
 def ingest_path(app: str, rule_name: str, path: str, top_level=False):
+    """
+    Ingest a path for an app and rulename
+
+    top_level is a strategy to keep track of items for the backlink feature
+    """
     if is_path_ignored(path):
         return
     path = str(path)
@@ -267,10 +303,11 @@ for game in var_users['installdir']:
 
 def search_for_homes(
         start_dir,
-        patterns=[".config", "AppData"],
-        ignore_patterns=["dosdevices", "nixpkgs", ".git", ".cache"],
         max_depth=9
 ):
+    """
+    Return an iterator of home dirs found starting from one start_dir
+    """
     if max_depth <= 0:
         return
     if start_dir.is_symlink():
@@ -279,10 +316,10 @@ def search_for_homes(
         return
     if is_path_ignored(start_dir):
         return
-    if start_dir.name in ignore_patterns:
+    if start_dir.name in HOMEFINDER_IGNORE_FOLDERS:
         return
     try:
-        for pattern in patterns:
+        for pattern in HOMEFINDER_FIND_FOLDERS:
             if (start_dir / pattern).exists():
                 yield start_dir
                 break
@@ -294,6 +331,9 @@ def search_for_homes(
 
 
 def get_homes():
+    """
+    Get all homes using data from the config file and search_for_homes
+    """
     extra_homes = get_paths('search', 'extra_homes')
     if extra_homes is not None:
         for home in extra_homes:
@@ -327,7 +367,7 @@ for homedir in get_homes():
                 continue
             ingest_path(game, rule_name, resolved_rule_path)
 
-    for documents_candidate in [ "Documentos", "Documents" ]:
+    for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
         documents = homedir / documents_candidate
         if not documents.exists():
             continue
