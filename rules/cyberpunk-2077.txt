@@ -1,1 +1,1 @@
-saves $home/Saved Games/CD Projekt Red/Cyberpunk 2077
+saves $home/Saved Games/CD Projekt Red/Cyberpunk 2077/*
