@@ -10,6 +10,8 @@ import sys
 from shutil import which
 import subprocess
 import itertools
+from time import time
+from typing import Optional, Dict, List
 
 config = ConfigParser()
 config['general'] = {}
@@ -126,6 +128,8 @@ def git_is_repo_dirty() -> bool:
     status_result = subprocess.run(['git', 'status', '-s'], capture_output=True, text=True)
     assert status_result.stdout is not None
     return len(status_result.stdout) > 0
+
+start_time = time()
 
 os.chdir(str(args.output))
 
@@ -378,6 +382,18 @@ for homedir in get_homes():
                     continue
                 ingest_path(game, rule_name, resolved_rule_path)
 
+finish_time = time()
+this_node_metric_dir = args.output / "__meta__" / hostname
+this_node_metric_dir.mkdir(exist_ok=True, parents=True)
+
+with (this_node_metric_dir / "last_run.txt").open('w') as f:
+    print(finish_time, file=f)
+
+with (this_node_metric_dir / "run_times.txt").open('a') as f:
+    print(f"{start_time},{finish_time - start_time}", file=f)
+
+git("add", "-A")
+git("commit", "-m", f"run report for {hostname}")
 
 git("push", always_show=True)
 print("Done!")
