@@ -35,6 +35,7 @@ parser.add_argument('-o', '--output', type=Path, help="Which folder to copy back
 parser.add_argument('-v', '--verbose', help="Give more detail about what is happening", action='store_true')
 parser.add_argument('-g', '--git', help="Use git for snapshot", action='store_true')
 parser.add_argument('-b', '--backlink', help="Create symlinks at the origin pointing to the repo", action='store_true')
+parser.add_argument('--max-depth', dest="max_depth", help="Max depth for filesystem searches", type=int, default=10)
 
 args = parser.parse_args()
 
@@ -257,19 +258,16 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
         filename = ppath.name
         parent = ppath.parent
         assert "*" not in str(parent), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
-        if args.verbose:
-            print(f"glob ingest path='{path}'")
         names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
         for name in names:
             item = parent / name
             new_rule_name = rule_name
             if item.is_dir():
                 new_rule_name = str(Path(new_rule_name) / item.name)
-            ingest_path(app, new_rule_name, item, top_level=True)
+            ingest_path(app, new_rule_name, parent / name, top_level=True)
     elif ppath.exists():
         if args.verbose:
             print(f"ingest '{str(path)}' '{str(output_dir)}'")
-        top_level = True
         if not ppath.is_symlink():
             copy_item(ppath, output_dir)
             if args.git:
@@ -285,8 +283,8 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
             ppath.unlink()  # recreate
         elif ppath.exists():
             delete(ppath)
-        if output_dir.name != ppath.name:
-            output_dir = output_dir / ppath.name
+        # if output_dir.name != ppath.name:
+        #     output_dir = output_dir / ppath.name
         print(f"ln {ppath} -> {output_dir}")
         ppath.symlink_to(output_dir)
 
@@ -303,11 +301,11 @@ for game in var_users['installdir']:
             resolved_rule_path = rule_path.replace('$installdir', str(game_install_dir.resolve()))
             if rule_path == resolved_rule_path:
                 continue
-            ingest_path(game, rule_name, resolved_rule_path)
+            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
 def search_for_homes(
         start_dir,
-        max_depth=9
+        max_depth=args.max_depth
 ):
     """
     Return an iterator of home dirs found starting from one start_dir
@@ -351,9 +349,11 @@ def get_homes():
         for home in search_for_homes(search_path):
             yield home
 
+ALL_HOMES = []
 for homedir in get_homes():
     if is_path_ignored(homedir):
         continue
+    ALL_HOMES.append(homedir)
     if args.verbose:
         print(f"Looking for stuff in {str(homedir)}")
     for game in var_users.get('home') or []:
@@ -361,7 +361,7 @@ for homedir in get_homes():
             resolved_rule_path = rule_path.replace('$home', str(homedir))
             if rule_path == resolved_rule_path:
                 continue
-            ingest_path(game, rule_name, resolved_rule_path)
+            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
     for game in var_users['appdata']:
         appdata = homedir / "AppData"
@@ -369,7 +369,7 @@ for homedir in get_homes():
             resolved_rule_path = rule_path.replace('$appdata', str(appdata))
             if rule_path == resolved_rule_path:
                 continue
-            ingest_path(game, rule_name, resolved_rule_path)
+            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
     for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
         documents = homedir / documents_candidate
@@ -380,7 +380,7 @@ for homedir in get_homes():
                 resolved_rule_path = rule_path.replace('$documents', str(documents))
                 if rule_path == resolved_rule_path:
                     continue
-                ingest_path(game, rule_name, resolved_rule_path)
+                ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
 finish_time = time()
 this_node_metric_dir = args.output / "__meta__" / hostname
@@ -396,4 +396,5 @@ git("add", "-A")
 git("commit", "-m", f"run report for {hostname}")
 
 git("push", always_show=True)
+print("Homedirs processed", ALL_HOMES)
 print("Done!")
