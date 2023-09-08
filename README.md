@@ -27,6 +27,14 @@ This tool is in early development with the hope to be useful, at least for me. *
 - Run the backup.py script using Python
     - `--help` will give you all information you need
 
+## ⚠️ Really important Information about the backlinking feature ⚠️
+**By default, the Steam Runtime at most allows read only access for stuff outside the protn prefix and some specific data**
+- This means that your Steam Play/Proton game will very likely be able to read the saves but will not be able to write new saves if the canonical destination is the repository.
+- This can be solved by setting `STEAM_COMPAT_MOUNTS` in the launch options **for each damn game you will use with this**.
+- In my case, I store my saves repo at `/home/lucasew/SavedGames` so a launch option that I use is `STEAM_COMPAT_MOUNTS=/home/lucasew/SavedGames %command%`.
+    - (**TODO**: Test if setting STEAM_COMPAT_MOUNTS system wide solves this)
+- Related issue: https://github.com/ValveSoftware/steam-runtime/issues/470
+
 ## Configuration reference
 
 The configuration follows the INI format and it's parsed by Python's native
