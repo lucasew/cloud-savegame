@@ -197,7 +197,7 @@ def copy_item(input_item, destination, depth=0):
     """
     Copy either a file or a folder from source to destination
     """
-    from shutil import copyfile
+    from shutil import copyfile, SameFileError
     input_item = Path(input_item)
     destination = Path(destination)
     if not input_item.exists():
@@ -217,7 +217,10 @@ def copy_item(input_item, destination, depth=0):
                 return
         print((" "*depth) + f"Copying '{input_item}' to '{destination}'")
         if input_item.is_file():
-            copyfile(input_item, destination)
+            try:
+                copyfile(input_item, destination)
+            except SameFileError:
+                pass
         elif input_item.is_symlink():
             final_path = input_item.resolve()
             if not str(final_path).startswith(str(args.output)):
