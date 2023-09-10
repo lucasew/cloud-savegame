@@ -1,0 +1,2 @@
+saves $documents/My Games/FalloutNV/Saves
+saves $appdata/Local/FalloutNV/Saves
