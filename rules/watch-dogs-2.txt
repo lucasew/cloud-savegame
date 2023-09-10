@@ -1,2 +1,3 @@
 screenshots $documents/WatchDogs2/Watch_Dogs 2/LocalStorage0/
-saves $documents/WatchDogs2/CPY_SAVES
+saves $documents/WatchDogs2/CPY_SAVES/Player/UPLAY/2688/*.save
+saves $ubisoft/3619/*.save

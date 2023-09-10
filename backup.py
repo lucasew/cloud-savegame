@@ -12,6 +12,7 @@ import subprocess
 import itertools
 from time import time
 from typing import Optional, Dict, List
+from collections import defaultdict
 
 config = ConfigParser()
 config['general'] = {}
@@ -149,8 +150,8 @@ if args.git:
         git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
 apps = set()
-required_vars = {}
-var_users = {}
+required_vars = defaultdict(lambda: set())
+var_users = defaultdict(lambda: set())
 all_vars = set()
 
 def parse_rules(app: str):
@@ -172,7 +173,6 @@ def parse_rules(app: str):
 rules_amount = 0
 for rulefile in RULES_DIR.glob('*.txt'):
     appname = rulefile.stem
-    required_vars[appname] = set()
     apps.add(appname)
 
     for rule_name, rule_path in parse_rules(appname):
@@ -183,8 +183,6 @@ for rulefile in RULES_DIR.glob('*.txt'):
         for var in variables:
             required_vars[appname].add(var)
             all_vars.add(var)
-            if var_users.get(var) is None:
-                var_users[var] = set()
             var_users[var].add(appname)
         rules_amount += 1
 
@@ -373,6 +371,45 @@ for homedir in get_homes():
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+    for program_files_candidate in homedir.parent.parent.iterdir():
+        try:
+            if not (program_files_candidate / "Common Files").exists():
+                continue
+            program_files = program_files_candidate
+            for game in var_users['program_files']:
+                for rule_name, rule_path in parse_rules(game):
+                    resolved_rule_path = rule_path.replace('$program_files', str(program_files))
+                    if rule_path == resolved_rule_path:
+                        continue
+                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+
+            ubisoft_users = set()
+            ubisoft_specific_dir = args.output / "ubisoft"
+            ubisoft_specific_dir.mkdir(parents=True, exist_ok=True)
+            ubisoft_users_file = ubisoft_specific_dir / "users.txt"
+            if ubisoft_users_file.exists():
+                for user in ubisoft_users_file.read_text().strip().split("\n"):
+                    ubisoft_users.add(user)
+            ubisoft_savegame_dir = program_files / "Ubisoft" / "Ubisoft Game Launcher" / "savegames"
+            if ubisoft_savegame_dir.exists():
+                for ubisoft_user in ubisoft_savegame_dir.iterdir():
+                    if ubisoft_user.is_dir():
+                        print("UBISOFT/iterdir: ", ubisoft_user)
+                        ubisoft_users.add(ubisoft_user.name)
+            ubisoft_users_file.write_text("\n".join(list(ubisoft_users)))
+
+            for ubisoft_user in ubisoft_users:
+                ubisoft_var = ubisoft_savegame_dir / ubisoft_user
+                for game in var_users['ubisoft']:
+                    for rule_name, rule_path in parse_rules(game):
+                        resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
+                        if rule_path == resolved_rule_path:
+                            continue
+                        print("UBISOFT", resolved_rule_path, ubisoft_users)
+                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+        except PermissionError:
+            continue
+
 
     for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
         documents = homedir / documents_candidate
