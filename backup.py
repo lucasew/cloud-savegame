@@ -3,7 +3,7 @@
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from configparser import ConfigParser
-from pprint import pprint
+from pprint import pformat
 import os
 import re
 import sys
@@ -13,13 +13,16 @@ import itertools
 from time import time
 from typing import Optional, Dict, List
 from collections import defaultdict
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 config = ConfigParser()
 config['general'] = {}
 config['general']['divider'] = ','
 
 DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
-RULES_DIR = Path(__file__).parents[0] / "rules"
 
 HOMEFINDER_FIND_FOLDERS = [ ".config", "AppData" ]
 HOMEFINDER_IGNORE_FOLDERS = ["dosdevices", "nixpkgs", ".git", ".cache"]
@@ -45,7 +48,16 @@ assert args.output.is_dir() or not args.output.exists(), "Output folder is not a
 if not args.output.exists():
     args.output.mkdir(exist_ok=True, parents=True)
 
+if args.verbose:
+    logging.root.setLevel(logging.DEBUG)
+
+logger.debug("loading configuration file")
 config.read(args.config)
+
+NEWS_LIST = []
+def warning_news(message: str):
+    NEWS_LIST.append(message)
+    logger.warning(message)
 
 """
 Config file helpers
@@ -91,7 +103,8 @@ def delete(item: Path):
     item = Path(item)
     item_new = item.parent / f"REMOVE.{item.name}"
     item.rename(item_new)
-    print("RM: ", item)
+    logger.info(f"rm: {item}")
+    warning_news(f"rm: removed item '{item}'. It was moved to {item_new}.")
     if item_new.is_dir():
         rmtree(str(item_new))
     else:
@@ -102,9 +115,8 @@ ignored_paths = get_paths('search', 'ignore')
 # print(args)
 # print(config)
 
-if args.verbose:
-    print("parsed config file:")
-    pprint({section: dict(config[section]) for section in config.sections()})
+logger.debug("parsed config file:")
+logger.debug({section: dict(config[section]) for section in config.sections()})
 
 git_bin = which("git")
 
@@ -120,7 +132,7 @@ def git(*params, always_show=False) -> None:
         if not (args.verbose or always_show):
             kwargs['stdout'] = subprocess.DEVNULL
             kwargs['stderr'] = subprocess.DEVNULL
-        print("git: %s" %(" ".join(map(lambda p: f"'{p}'", params))))
+        logger.info("git: %s" %(" ".join(map(lambda p: f"'{p}'", params))))
         subprocess.call([git_bin, *params], **kwargs)
 
 def git_is_repo_dirty() -> bool:
@@ -149,16 +161,25 @@ if args.git:
         git("add", "-A")
         git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
+RULES_DIR = [
+    Path(__file__).parents[0] / "rules",
+    args.output / "__rules__"
+]
+RULES_DIR[1].mkdir(exist_ok=True, parents=True)
+
 apps = set()
 required_vars = defaultdict(lambda: set())
 var_users = defaultdict(lambda: set())
 all_vars = set()
+rulefiles = {}
 
 def parse_rules(app: str):
     """
     Parse rules from one app
     """
-    for line in (RULES_DIR / f"{app}.txt").read_text().split('\n'):
+    rulefile = rulefiles[app]
+    logger.debug(f"loading rule '{rulefile}'")
+    for line in Path(rulefile).read_text().split('\n'):
         rule = line.strip()
         if len(rule) > 0:
             parts = rule.split(' ')
@@ -171,25 +192,29 @@ def parse_rules(app: str):
 
 # load rules
 rules_amount = 0
-for rulefile in RULES_DIR.glob('*.txt'):
-    appname = rulefile.stem
-    apps.add(appname)
 
-    for rule_name, rule_path in parse_rules(appname):
-        variables = list(re.match('\$([a-z]*)', rule_path).groups())
-        if len(variables) == 0:
-            ingest_path(appname, rule_name, rule_path)
-            continue
-        for var in variables:
-            required_vars[appname].add(var)
-            all_vars.add(var)
-            var_users[var].add(appname)
-        rules_amount += 1
+for ruledir in RULES_DIR:
+    if not ruledir.is_dir():
+        continue
+    for rulefile in ruledir.glob('*.txt'):
+        appname = rulefile.stem
+        apps.add(appname)
+        rulefiles[appname] = rulefile
 
-if args.verbose:
-    print(f"loaded {rules_amount} rules for {len(apps)} apps")
-    print("all apps with rules loaded: ", apps)
-    print("all variables mentioned in rules: ", all_vars)
+        for rule_name, rule_path in parse_rules(appname):
+            variables = list(re.match('\$([a-z]*)', rule_path).groups())
+            if len(variables) == 0:
+                ingest_path(appname, rule_name, rule_path)
+                continue
+            for var in variables:
+                required_vars[appname].add(var)
+                all_vars.add(var)
+                var_users[var].add(appname)
+            rules_amount += 1
+
+logger.debug(f"loaded {rules_amount} rules for {len(apps)} apps")
+logger.debug(f"all apps with rules loaded: {pformat(apps)}")
+logger.debug(f"all variables mentioned in rules: {all_vars}")
 
 def copy_item(input_item, destination, depth=0):
     """
@@ -202,7 +227,7 @@ def copy_item(input_item, destination, depth=0):
         return
     if str(input_item).startswith(str(args.output)):
         if args.verbose:
-            print((""*depth) + f"Not copying '{input_item}': Origin is inside output")
+            logger.warning((""*depth) + f"copy_item: Not copying '{input_item}': Origin is inside output")
         return
     if input_item.is_file() or input_item.is_symlink():
         destination.parent.mkdir(exist_ok=True, parents=True)
@@ -211,9 +236,9 @@ def copy_item(input_item, destination, depth=0):
         if destination.exists():
             if (input_item.stat().st_mtime < destination.stat().st_mtime):
                 if args.verbose:
-                    print((""*depth) + f"Not copying '{input_item}': Didn't change")
+                    logger.debug((""*depth) + f"copy_item: Not copying '{input_item}': Didn't change")
                 return
-        print((" "*depth) + f"Copying '{input_item}' to '{destination}'")
+        logger.info((" "*depth) + f"copy_item: Copying '{input_item}' to '{destination}'")
         if input_item.is_file():
             try:
                 copyfile(input_item, destination)
@@ -222,7 +247,7 @@ def copy_item(input_item, destination, depth=0):
         elif input_item.is_symlink():
             final_path = input_item.resolve()
             if not str(final_path).startswith(str(args.output)):
-                print(f"Symlink '{final_path}' doesn't point to a item inside repo path")
+                logger.warning(f"copy_item: Symlink '{final_path}' doesn't point to a item inside repo path")
         return
     if input_item.is_dir():
         destination.mkdir(exist_ok=True, parents=True)
@@ -235,7 +260,7 @@ def is_path_ignored(path) -> bool:
     """
     for ignored in ignored_paths:
         if str(path).startswith(str(ignored)):
-            print(f"Path ignored: {path}")
+            logger.info(f"copy_item: Path ignored: {path}")
             return True
     return False
 
@@ -267,8 +292,7 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
                 new_rule_name = str(Path(new_rule_name) / item.name)
             ingest_path(app, new_rule_name, parent / name, top_level=True)
     elif ppath.exists():
-        if args.verbose:
-            print(f"ingest '{str(path)}' '{str(output_dir)}'")
+        logger.info(f"ingest '{str(path)}' '{str(output_dir)}'")
         if not ppath.is_symlink():
             copy_item(ppath, output_dir)
             if args.git:
@@ -278,7 +302,7 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
                     git("commit", "-m", commit)
         # backlink logic
     if args.backlink and top_level:
-        # print(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
+        logger.debug(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
         ppath.parent.mkdir(parents=True, exist_ok=True)
         if ppath.is_symlink():
             ppath.unlink()  # recreate
@@ -286,14 +310,16 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
             delete(ppath)
         # if output_dir.name != ppath.name:
         #     output_dir = output_dir / ppath.name
-        print(f"ln {ppath} -> {output_dir}")
+        logger.info(f"ln {ppath} -> {output_dir}")
         ppath.symlink_to(output_dir)
+    if ppath.is_symlink() and not ppath.exists():
+        warning_news(f"This may be a rule or a program bug: '{ppath}' points to a non existent location.")
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
     if game_install_dirs is None:
         if get_str(game, 'not_installed') is None:
-            print(f"installdir missing for game {game}, please add it in the game configuration section or set anything to not_installed to disable this warning")
+            warning_news(f"installdir missing for game {game}, please add it in the game configuration section or set anything to not_installed to disable this warning")
         continue
     for game_install_dir in game_install_dirs:
         if is_path_ignored(game_install_dir):
@@ -343,7 +369,7 @@ def get_homes():
             if is_path_ignored(home):
                 continue
             if not home.exists():
-                print(f"Warning: extra home '{str(home)}' does not exist")
+                warning_news(f"extra home '{str(home)}' does not exist")
             else:
                 yield home
     for search_path in get_paths('search', 'paths'):
@@ -355,8 +381,7 @@ for homedir in get_homes():
     if is_path_ignored(homedir):
         continue
     ALL_HOMES.append(homedir)
-    if args.verbose:
-        print(f"Looking for stuff in {str(homedir)}")
+    logger.debug(f"Looking for stuff in {str(homedir)}")
     for game in var_users.get('home') or []:
         for rule_name, rule_path in parse_rules(game):
             resolved_rule_path = rule_path.replace('$home', str(homedir))
@@ -371,10 +396,13 @@ for homedir in get_homes():
             if rule_path == resolved_rule_path:
                 continue
             ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+
+    has_program_files = False
     for program_files_candidate in homedir.parent.parent.iterdir():
         try:
             if not (program_files_candidate / "Common Files").exists():
                 continue
+            has_program_files = True
             program_files = program_files_candidate
             for game in var_users['program_files']:
                 for rule_name, rule_path in parse_rules(game):
@@ -394,7 +422,7 @@ for homedir in get_homes():
             if ubisoft_savegame_dir.exists():
                 for ubisoft_user in ubisoft_savegame_dir.iterdir():
                     if ubisoft_user.is_dir():
-                        print("UBISOFT/iterdir: ", ubisoft_user)
+                        logger.debug(f"UBISOFT/iterdir: {ubisoft_user}")
                         ubisoft_users.add(ubisoft_user.name)
             ubisoft_users_file.write_text("\n".join(list(ubisoft_users)))
 
@@ -405,11 +433,13 @@ for homedir in get_homes():
                         resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
                         if rule_path == resolved_rule_path:
                             continue
-                        print("UBISOFT", resolved_rule_path, ubisoft_users)
+                        logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
                         ingest_path(game, rule_name, resolved_rule_path, top_level=True)
         except PermissionError:
+            has_program_files = True
             continue
-
+        if not has_program_files:
+            warning_news(f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. This is a bug and a proof that this implementation is incomplete. Please report. Context: https://twitter.com/lucas59356/status/1700965748611449086.")
 
     for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
         documents = homedir / documents_candidate
@@ -426,6 +456,7 @@ finish_time = time()
 this_node_metric_dir = args.output / "__meta__" / hostname
 this_node_metric_dir.mkdir(exist_ok=True, parents=True)
 
+logger.debug("Writing runtime metrics")
 with (this_node_metric_dir / "last_run.txt").open('w') as f:
     print(finish_time, file=f)
 
@@ -436,5 +467,10 @@ git("add", "-A")
 git("commit", "-m", f"run report for {hostname}")
 
 git("push", always_show=True)
-print("Homedirs processed", ALL_HOMES)
-print("Done!")
+logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
+logger.info("Done!")
+
+if len(NEWS_LIST) > 0:
+    logger.warning("=== IMPORTANT INFORMATION ABOUT THE RUN ===")
+    for item in NEWS_LIST:
+        logger.warning(f"- {item}")
