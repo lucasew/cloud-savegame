@@ -12,7 +12,7 @@ stdenvNoCC.mkDerivation {
 
   installPhase = ''
     mkdir $out/bin -p
-    makeWrapper $src/backup.py $out/bin/cloud-savegame \
-      --prefix ${python3.interpreter}
+    makeWrapper ${python3.interpreter} $out/bin/cloud-savegame \
+      --add-flags $src/backup.py
   '';
 }
