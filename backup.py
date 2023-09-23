@@ -162,6 +162,7 @@ if args.git:
         git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
 RULES_DIR = [Path(__file__).parents[0] / "rules", args.output / "__rules__"]
+RULES_DIR[1].mkdir(exist_ok=True, parents=True)
 
 apps = set()
 required_vars = defaultdict(lambda: set())
@@ -190,7 +191,6 @@ def parse_rules(app: str):
 rules_amount = 0
 
 for ruledir in RULES_DIR:
-    ruledir.mkdir(exist_ok=True, parents=True)
     if not ruledir.is_dir():
         continue
     for rulefile in ruledir.glob('*.txt'):
