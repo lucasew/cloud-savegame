@@ -1,15 +1,18 @@
-{ stdenvNoCC, python3 }:
+{ stdenvNoCC, python3, makeWrapper }:
 stdenvNoCC.mkDerivation {
   name = "cloud-savegame";
 
+  src = ./.;
+
   buildInputs = [ python3 ];
+
+  nativeBuildInputs = [ makeWrapper ];
 
   dontUnpack = true;
 
   installPhase = ''
     mkdir $out/bin -p
-    install ${./backup.py} $out/bin/cloud-savegame
-    sed 's;\(DEFAULT_CONFIG_FILE =\)[^$]*;\1"${./demo.cfg}";'  -i $out/bin/cloud-savegame
-    sed 's;\(RULES_DIR =\)[^$]*;\1Path("${./rules}");'  -i $out/bin/cloud-savegame
+    makeWrapper $src/backup.py $out/bin/cloud-savegame \
+      --prefix ${python3.interpreter}
   '';
 }
