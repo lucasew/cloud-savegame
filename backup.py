@@ -218,34 +218,27 @@ def copy_item(input_item, destination, depth=0):
     Copy either a file or a folder from source to destination
     """
     from shutil import copyfile, SameFileError
-    input_item = Path(input_item)
-    destination = Path(destination)
+    input_item = Path(input_item.resolve())
+    destination = Path(destination.resolve())
+    print('item', input_item, destination)
     if not input_item.exists():
         return
     if str(input_item).startswith(str(args.output)):
         if args.verbose:
             logger.warning((""*depth) + f"copy_item: Not copying '{input_item}': Origin is inside output")
         return
-    if input_item.is_file() or input_item.is_symlink():
+    if input_item.is_file():
         destination.parent.mkdir(exist_ok=True, parents=True)
-        if destination.is_dir():
-            destination = destination / input_item.name
         if destination.exists():
             if (input_item.stat().st_mtime < destination.stat().st_mtime):
                 if args.verbose:
                     logger.debug((""*depth) + f"copy_item: Not copying '{input_item}': Didn't change")
                 return
         logger.info((" "*depth) + f"copy_item: Copying '{input_item}' to '{destination}'")
-        if input_item.is_file():
-            try:
-                copyfile(input_item, destination)
-            except SameFileError:
-                pass
-        elif input_item.is_symlink():
-            final_path = input_item.resolve()
-            if not str(final_path).startswith(str(args.output)):
-                logger.warning(f"copy_item: Symlink '{final_path}' doesn't point to a item inside repo path")
-        return
+        try:
+            copyfile(input_item, destination)
+        except SameFileError:
+            pass
     if input_item.is_dir():
         destination.mkdir(exist_ok=True, parents=True)
         for item in map(lambda x: x.name, input_item.iterdir()):
@@ -290,14 +283,13 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
             ingest_path(app, new_rule_name, parent / name, top_level=True)
     elif ppath.exists():
         logger.info(f"ingest '{str(path)}' '{str(output_dir)}'")
-        if not ppath.is_symlink():
-            copy_item(ppath, output_dir)
-            if args.git:
-                if git_is_repo_dirty():
-                    commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
-                    git("add", "-A")
-                    git("commit", "-m", commit)
-        # backlink logic
+        copy_item(ppath, output_dir)
+        if args.git:
+            if git_is_repo_dirty():
+                commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
+                git("add", "-A")
+                git("commit", "-m", commit)
+    # backlink logic
     if args.backlink and top_level:
         logger.debug(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
         ppath.parent.mkdir(parents=True, exist_ok=True)
