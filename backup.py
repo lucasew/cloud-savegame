@@ -161,10 +161,8 @@ if args.git:
         git("add", "-A")
         git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
-RULES_DIR = [
-    Path(__file__).parents[0] / "rules",
-    args.output / "__rules__"
-]
+RULES_DIR = [Path(__file__).parents[0] / "rules", args.output / "__rules__"]
+
 RULES_DIR[1].mkdir(exist_ok=True, parents=True)
 
 apps = set()
