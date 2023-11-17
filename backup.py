@@ -155,7 +155,6 @@ if args.git:
     if is_repo_initially_dirty:
         git("add", "-A")
         git("stash", "push")
-    git("pull")
     if is_repo_initially_dirty:
         git("stash", "pop")
         git("add", "-A")
@@ -455,6 +454,7 @@ with (this_node_metric_dir / "run_times.txt").open('a') as f:
 git("add", "-A")
 git("commit", "-m", f"run report for {hostname}")
 
+git("pull", "--rebase")
 git("push", always_show=True)
 logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
 logger.info("Done!")
