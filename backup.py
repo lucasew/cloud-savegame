@@ -310,6 +310,9 @@ for game in var_users['installdir']:
             warning_news(f"installdir missing for game {game}, please add it in the game configuration section or set anything to not_installed to disable this warning")
         continue
     for game_install_dir in game_install_dirs:
+        if not game_install_dir.exists():
+            warning_news(f"Game install dir for {game} doesn't exist: {game_install_dir}")
+            continue
         if is_path_ignored(game_install_dir):
             continue
         for rule_name, rule_path in parse_rules(game):
