@@ -217,6 +217,7 @@ def copy_item(input_item, destination, depth=0):
     Copy either a file or a folder from source to destination
     """
     from shutil import copyfile, SameFileError
+    original_input_item = input_item
     input_item = Path(input_item.resolve())
     destination = Path(destination.resolve())
     print('item', input_item, destination)
@@ -225,7 +226,7 @@ def copy_item(input_item, destination, depth=0):
     if str(input_item).startswith(str(args.output)):
         logger.warning((" "*depth) + f"copy_item: Not copying '{input_item}': Origin is inside output")
         return
-    if input_item.is_symlink():
+    if original_input_item.is_symlink():
         logger.warning((" "*depth, + f"copy_item: Not copying '{input_item}' because it's a symlink"))
         return
     if input_item.is_file():
