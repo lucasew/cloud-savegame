@@ -223,8 +223,10 @@ def copy_item(input_item, destination, depth=0):
     if not input_item.exists():
         return
     if str(input_item).startswith(str(args.output)):
-        if args.verbose:
-            logger.warning((""*depth) + f"copy_item: Not copying '{input_item}': Origin is inside output")
+        logger.warning((" "*depth) + f"copy_item: Not copying '{input_item}': Origin is inside output")
+        return
+    if input_item.is_symlink():
+        logger.warning((" "*depth, + f"copy_item: Not copying '{input_item}' because it's a symlink"))
         return
     if input_item.is_file():
         destination.parent.mkdir(exist_ok=True, parents=True)
