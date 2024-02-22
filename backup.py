@@ -447,6 +447,7 @@ try:
                         continue
                     ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 finally:
+    logger.info("Finishing up")
     finish_time = time()
     this_node_metric_dir = args.output / "__meta__" / hostname
     this_node_metric_dir.mkdir(exist_ok=True, parents=True)
