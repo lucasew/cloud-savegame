@@ -370,102 +370,103 @@ def get_homes():
         for home in search_for_homes(search_path):
             yield home
 
-ALL_HOMES = []
-for homedir in get_homes():
-    if is_path_ignored(homedir):
-        continue
-    ALL_HOMES.append(homedir)
-    logger.debug(f"Looking for stuff in {str(homedir)}")
-    for game in var_users.get('home') or []:
-        for rule_name, rule_path in parse_rules(game):
-            resolved_rule_path = rule_path.replace('$home', str(homedir))
-            if rule_path == resolved_rule_path:
-                continue
-            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
-
-    for game in var_users['appdata']:
-        appdata = homedir / "AppData"
-        for rule_name, rule_path in parse_rules(game):
-            resolved_rule_path = rule_path.replace('$appdata', str(appdata))
-            if rule_path == resolved_rule_path:
-                continue
-            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
-
-    has_program_files = False
-    for program_files_candidate in homedir.parent.parent.iterdir():
-        try:
-            if not (program_files_candidate / "Common Files").exists():
-                continue
-            has_program_files = True
-            program_files = program_files_candidate
-            for game in var_users['program_files']:
-                for rule_name, rule_path in parse_rules(game):
-                    resolved_rule_path = rule_path.replace('$program_files', str(program_files))
-                    if rule_path == resolved_rule_path:
-                        continue
-                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
-
-            ubisoft_users = set()
-            ubisoft_specific_dir = args.output / "ubisoft"
-            ubisoft_specific_dir.mkdir(parents=True, exist_ok=True)
-            ubisoft_users_file = ubisoft_specific_dir / "users.txt"
-            if ubisoft_users_file.exists():
-                for user in ubisoft_users_file.read_text().strip().split("\n"):
-                    ubisoft_users.add(user)
-            ubisoft_savegame_dir = program_files / "Ubisoft" / "Ubisoft Game Launcher" / "savegames"
-            if ubisoft_savegame_dir.exists():
-                for ubisoft_user in ubisoft_savegame_dir.iterdir():
-                    if ubisoft_user.is_dir():
-                        logger.debug(f"UBISOFT/iterdir: {ubisoft_user}")
-                        ubisoft_users.add(ubisoft_user.name)
-            ubisoft_users_file.write_text("\n".join(list(ubisoft_users)))
-
-            for ubisoft_user in ubisoft_users:
-                ubisoft_var = ubisoft_savegame_dir / ubisoft_user
-                for game in var_users['ubisoft']:
-                    for rule_name, rule_path in parse_rules(game):
-                        resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
-                        if rule_path == resolved_rule_path:
-                            continue
-                        logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
-                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
-        except PermissionError:
-            has_program_files = True
+try:
+    ALL_HOMES = []
+    for homedir in get_homes():
+        if is_path_ignored(homedir):
             continue
-        if not has_program_files:
-            warning_news(f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. This is a bug and a proof that this implementation is incomplete. Please report. Context: https://twitter.com/lucas59356/status/1700965748611449086.")
-
-    for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
-        documents = homedir / documents_candidate
-        if not documents.exists():
-            continue
-        for game in var_users['documents']:
+        ALL_HOMES.append(homedir)
+        logger.debug(f"Looking for stuff in {str(homedir)}")
+        for game in var_users.get('home') or []:
             for rule_name, rule_path in parse_rules(game):
-                resolved_rule_path = rule_path.replace('$documents', str(documents))
+                resolved_rule_path = rule_path.replace('$home', str(homedir))
                 if rule_path == resolved_rule_path:
                     continue
                 ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
-finish_time = time()
-this_node_metric_dir = args.output / "__meta__" / hostname
-this_node_metric_dir.mkdir(exist_ok=True, parents=True)
+        for game in var_users['appdata']:
+            appdata = homedir / "AppData"
+            for rule_name, rule_path in parse_rules(game):
+                resolved_rule_path = rule_path.replace('$appdata', str(appdata))
+                if rule_path == resolved_rule_path:
+                    continue
+                ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
-logger.debug("Writing runtime metrics")
-with (this_node_metric_dir / "last_run.txt").open('w') as f:
-    print(finish_time, file=f)
+        has_program_files = False
+        for program_files_candidate in homedir.parent.parent.iterdir():
+            try:
+                if not (program_files_candidate / "Common Files").exists():
+                    continue
+                has_program_files = True
+                program_files = program_files_candidate
+                for game in var_users['program_files']:
+                    for rule_name, rule_path in parse_rules(game):
+                        resolved_rule_path = rule_path.replace('$program_files', str(program_files))
+                        if rule_path == resolved_rule_path:
+                            continue
+                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
-with (this_node_metric_dir / "run_times.txt").open('a') as f:
-    print(f"{start_time},{finish_time - start_time}", file=f)
+                ubisoft_users = set()
+                ubisoft_specific_dir = args.output / "ubisoft"
+                ubisoft_specific_dir.mkdir(parents=True, exist_ok=True)
+                ubisoft_users_file = ubisoft_specific_dir / "users.txt"
+                if ubisoft_users_file.exists():
+                    for user in ubisoft_users_file.read_text().strip().split("\n"):
+                        ubisoft_users.add(user)
+                ubisoft_savegame_dir = program_files / "Ubisoft" / "Ubisoft Game Launcher" / "savegames"
+                if ubisoft_savegame_dir.exists():
+                    for ubisoft_user in ubisoft_savegame_dir.iterdir():
+                        if ubisoft_user.is_dir():
+                            logger.debug(f"UBISOFT/iterdir: {ubisoft_user}")
+                            ubisoft_users.add(ubisoft_user.name)
+                ubisoft_users_file.write_text("\n".join(list(ubisoft_users)))
 
-git("add", "-A")
-git("commit", "-m", f"run report for {hostname}")
+                for ubisoft_user in ubisoft_users:
+                    ubisoft_var = ubisoft_savegame_dir / ubisoft_user
+                    for game in var_users['ubisoft']:
+                        for rule_name, rule_path in parse_rules(game):
+                            resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
+                            if rule_path == resolved_rule_path:
+                                continue
+                            logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
+                            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+            except PermissionError:
+                has_program_files = True
+                continue
+            if not has_program_files:
+                warning_news(f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. This is a bug and a proof that this implementation is incomplete. Please report. Context: https://twitter.com/lucas59356/status/1700965748611449086.")
 
-git("pull", "--rebase")
-git("push", always_show=True)
-logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
-logger.info("Done!")
+        for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
+            documents = homedir / documents_candidate
+            if not documents.exists():
+                continue
+            for game in var_users['documents']:
+                for rule_name, rule_path in parse_rules(game):
+                    resolved_rule_path = rule_path.replace('$documents', str(documents))
+                    if rule_path == resolved_rule_path:
+                        continue
+                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+finally:
+    finish_time = time()
+    this_node_metric_dir = args.output / "__meta__" / hostname
+    this_node_metric_dir.mkdir(exist_ok=True, parents=True)
 
-if len(NEWS_LIST) > 0:
-    logger.warning("=== IMPORTANT INFORMATION ABOUT THE RUN ===")
-    for item in NEWS_LIST:
-        logger.warning(f"- {item}")
+    logger.debug("Writing runtime metrics")
+    with (this_node_metric_dir / "last_run.txt").open('w') as f:
+        print(finish_time, file=f)
+
+    with (this_node_metric_dir / "run_times.txt").open('a') as f:
+        print(f"{start_time},{finish_time - start_time}", file=f)
+
+    git("add", "-A")
+    git("commit", "-m", f"run report for {hostname}")
+
+    git("pull", "--rebase")
+    git("push", always_show=True)
+    logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
+    logger.info("Done!")
+
+    if len(NEWS_LIST) > 0:
+        logger.warning("=== IMPORTANT INFORMATION ABOUT THE RUN ===")
+        for item in NEWS_LIST:
+            logger.warning(f"- {item}")
