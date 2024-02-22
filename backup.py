@@ -264,47 +264,51 @@ def ingest_path(app: str, rule_name: str, path: str, top_level=False):
 
     top_level is a strategy to keep track of items for the backlink feature
     """
-    if is_path_ignored(path):
-        return
-    path = str(path)
-    ppath = Path(path)
-    output_dir = args.output / app / rule_name
-    if not output_dir.exists():
-        output_dir.mkdir(exist_ok=True, parents=True)
-    if "*" in path:
-        top_level = False
-        filename = ppath.name
-        parent = ppath.parent
-        assert "*" not in str(parent), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
-        names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
-        for name in names:
-            item = parent / name
-            new_rule_name = rule_name
-            if item.is_dir():
-                new_rule_name = str(Path(new_rule_name) / item.name)
-            ingest_path(app, new_rule_name, parent / name, top_level=True)
-    elif ppath.exists():
-        logger.info(f"ingest '{str(path)}' '{str(output_dir)}'")
-        copy_item(ppath, output_dir)
-        if args.git:
-            if git_is_repo_dirty():
-                commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
-                git("add", "-A")
-                git("commit", "-m", commit)
-    # backlink logic
-    if args.backlink and top_level:
-        logger.debug(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
-        ppath.parent.mkdir(parents=True, exist_ok=True)
-        if ppath.is_symlink():
-            ppath.unlink()  # recreate
+    try:
+        if is_path_ignored(path):
+            return
+        path = str(path)
+        ppath = Path(path)
+        output_dir = args.output / app / rule_name
+        if not output_dir.exists():
+            output_dir.mkdir(exist_ok=True, parents=True)
+        if "*" in path:
+            top_level = False
+            filename = ppath.name
+            parent = ppath.parent
+            assert "*" not in str(parent), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
+            names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
+            for name in names:
+                item = parent / name
+                new_rule_name = rule_name
+                if item.is_dir():
+                    new_rule_name = str(Path(new_rule_name) / item.name)
+                ingest_path(app, new_rule_name, parent / name, top_level=True)
         elif ppath.exists():
-            delete(ppath)
-        # if output_dir.name != ppath.name:
-        #     output_dir = output_dir / ppath.name
-        logger.info(f"ln {ppath} -> {output_dir}")
-        ppath.symlink_to(output_dir)
-    if ppath.is_symlink() and not ppath.exists():
-        warning_news(f"This may be a rule or a program bug: '{ppath}' points to a non existent location.")
+            logger.info(f"ingest '{str(path)}' '{str(output_dir)}'")
+            copy_item(ppath, output_dir)
+            if args.git:
+                if git_is_repo_dirty():
+                    commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
+                    git("add", "-A")
+                    git("commit", "-m", commit)
+        # backlink logic
+        if args.backlink and top_level:
+            logger.debug(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
+            ppath.parent.mkdir(parents=True, exist_ok=True)
+            if ppath.is_symlink():
+                ppath.unlink()  # recreate
+            elif ppath.exists():
+                delete(ppath)
+            # if output_dir.name != ppath.name:
+            #     output_dir = output_dir / ppath.name
+            logger.info(f"ln {ppath} -> {output_dir}")
+            ppath.symlink_to(output_dir)
+        if ppath.is_symlink() and not ppath.exists():
+            warning_news(f"This may be a rule or a program bug: '{ppath}' points to a non existent location.")
+    except Exception as e:
+        warning_news(f"while ingesting app={app} rule={rule_name} path={path}: {type(e)} {e}")
+
 
 for game in var_users['installdir']:
     game_install_dirs = get_paths(game, 'installdir')
