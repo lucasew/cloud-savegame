@@ -302,7 +302,7 @@ def main():
             rulefiles[appname] = rulefile
 
             for rule_name, rule_path in parse_rules(appname):
-                variables = list(re.match("\$([a-z]*)", rule_path).groups())
+                variables = list(re.match(r"\$([a-z]*)", rule_path).groups())
                 if len(variables) == 0:
                     ingest_path(appname, rule_name, rule_path)
                     continue

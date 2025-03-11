@@ -1,7 +1,7 @@
 [project]
 name = "cloud-savegame"
 readme = "README.md"
-version = "0.0.2"
+dynamic = ["version"]
 
 dependencies = []
 
@@ -12,3 +12,10 @@ requires = ["hatchling"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["cloud_savegame"]
+
+[tool.hatch.version]
+path = "cloud_savegame/VERSION"
+pattern = "^(?P<version>[^$]*)"
+
+[project.scripts]
+cloud_savegame = "cloud_savegame:main"
