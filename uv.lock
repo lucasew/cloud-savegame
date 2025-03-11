@@ -1,0 +1,7 @@
+version = 1
+requires-python = ">=3.12"
+
+[[package]]
+name = "cloud-savegame"
+version = "0.0.2"
+source = { editable = "." }
