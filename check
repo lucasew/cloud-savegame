@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -eu -o pipefail
+
+uv sync --extra dev
+ruff format
+ruff check
+pytest
+

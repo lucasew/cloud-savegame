@@ -1,0 +1,14 @@
+[project]
+name = "cloud-savegame"
+readme = "README.md"
+version = "0.0.2"
+
+dependencies = []
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["cloud_savegame"]

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+./check
+
+echo release liberada
+# exit 0
+
+
+if [ $# == 1 ]; then
+	VERSION="$1"; shift
+else
+	echo ./make_release versao_nova >&2
+	exit 1
+fi
+
+printf "%s" "$VERSION" > cloud_savegame/VERSION
+
+git add -A
+git commit -sm "bump to $VERSION"
+git tag "$VERSION"
+git push --tags
