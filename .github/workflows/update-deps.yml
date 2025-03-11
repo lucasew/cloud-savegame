@@ -18,10 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
       - name: Regenerate lockfile
         run: |
           rm uv.lock
-          nix run nixpkgs#uv sync
+          uv sync
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v4
