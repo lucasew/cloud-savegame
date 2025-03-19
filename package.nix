@@ -1,18 +1,14 @@
-{ stdenvNoCC, python3, makeWrapper }:
-stdenvNoCC.mkDerivation {
+{ python3Packages }:
+python3Packages.buildPythonApplication {
   name = "cloud-savegame";
+  version = builtins.readFile ./cloud_savegame/VERSION;
+  pyproject = true;
 
   src = ./.;
 
-  buildInputs = [ python3 ];
+  build-system = [
+    python3Packages.hatchling
+  ];
 
-  nativeBuildInputs = [ makeWrapper ];
-
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir $out/bin -p
-    makeWrapper ${python3.interpreter} $out/bin/cloud-savegame \
-      --add-flags $src/backup.py
-  '';
+  meta.mainProgram = "cloud_savegame";
 }
