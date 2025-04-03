@@ -26,7 +26,7 @@ HOMEFINDER_DOCUMENTS_FOLDER = ["Documentos", "Documents"]
 GIT_BIN = which("git")
 NEWS_LIST = []
 
-
+# Function to run git commands
 def git(*params, always_show=False) -> None:
     """
     Run git with the parameters if it's enabled
@@ -37,7 +37,7 @@ def git(*params, always_show=False) -> None:
     logger.info("git: %s", " ".join(f"'{p}'" for p in params))
     subprocess.call([GIT_BIN, *params])
 
-
+# Function to check if the Git repo has uncommitted files
 def git_is_repo_dirty() -> bool:
     """
     Check if the Git repo has uncommitted files
@@ -47,7 +47,7 @@ def git_is_repo_dirty() -> bool:
     )
     return bool(status_result.stdout)
 
-
+# Function to delete either a file or a folder with backup mechanism
 def delete(item: Path) -> None:
     """
     Delete either a file or a folder with backup mechanism
@@ -62,7 +62,7 @@ def delete(item: Path) -> None:
     else:
         item_new.unlink(missing_ok=True)
 
-
+# Function to add a message to the news list and log it as a warning
 def warning_news(message: str) -> None:
     """
     Add a message to the news list and log it as a warning
@@ -70,14 +70,14 @@ def warning_news(message: str) -> None:
     NEWS_LIST.append(message)
     logger.warning(message)
 
-
+# Function to get hostname of this machine to report it in the commit
 def get_hostname() -> str:
     """
     Get hostname of this machine to report it in the commit
     """
     return socket.gethostname()
 
-
+# Main function to handle the backup process
 def main() -> None:
     global GIT_BIN
     config = ConfigParser()
@@ -192,6 +192,7 @@ def main() -> None:
             git("add", "-A")
             git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
+    # Function to check if a path is in the list of ignored paths
     def is_path_ignored(path) -> bool:
         """
         Is the path in the list of ignored paths?
@@ -199,6 +200,7 @@ def main() -> None:
         path_str = str(path)
         return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
 
+    # Function to copy either a file or a folder from source to destination
     def copy_item(input_item: Path, destination: Path, depth: int = 0) -> None:
         """
         Copy either a file or a folder from source to destination
@@ -250,6 +252,7 @@ def main() -> None:
             for item in input_item.iterdir():
                 copy_item(input_item / item.name, destination / item.name, depth=depth + 1)
 
+    # Function to ingest a path for an app and rulename
     def ingest_path(app: str, rule_name: str, path: str, top_level: bool = False) -> None:
         """
         Ingest a path for an app and rulename
@@ -333,6 +336,7 @@ def main() -> None:
     all_vars = set()
     rulefiles = {}
 
+    # Function to parse rules from one app
     def parse_rules(app: str) -> Iterator[Tuple[str, str]]:
         """
         Parse rules from one app
@@ -408,6 +412,7 @@ def main() -> None:
 
                 ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
+    # Function to search for home directories
     def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
         """
         Return an iterator of home dirs found starting from one start_dir
@@ -428,6 +433,7 @@ def main() -> None:
         except PermissionError:
             pass
 
+    # Function to get all home directories
     def get_homes() -> Iterator[Path]:
         """
         Get all homes using data from the config file and search_for_homes
