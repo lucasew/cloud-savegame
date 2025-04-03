@@ -9,43 +9,49 @@ from collections import defaultdict
 from configparser import ConfigParser
 from pathlib import Path
 from pprint import pformat
-from shutil import which
+from shutil import which, copyfile, SameFileError, rmtree
 from time import time
-from typing import List, Optional
+from typing import List, Optional, Set, Dict, Tuple, Iterator
+import socket
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
+HOMEFINDER_FIND_FOLDERS = [".config", "AppData"]
+HOMEFINDER_IGNORE_FOLDERS = ["dosdevices", "nixpkgs", ".git", ".cache"]
+HOMEFINDER_DOCUMENTS_FOLDER = ["Documentos", "Documents"]
 GIT_BIN = which("git")
+NEWS_LIST = []
 
 
 def git(*params, always_show=False) -> None:
     """
     Run git with the parameters if it's enabled
-
     Noop if git is disabled
     """
     if GIT_BIN is None:
         return
-    assert GIT_BIN is not None, "git is not installed"
-    logger.info("git: %s" % (" ".join(map(lambda p: f"'{p}'", params))))
+    logger.info("git: %s", " ".join(f"'{p}'" for p in params))
     subprocess.call([GIT_BIN, *params])
 
 
 def git_is_repo_dirty() -> bool:
     """
-    Is the Git repo with uncommited files?
+    Check if the Git repo has uncommitted files
     """
     status_result = subprocess.run(
         ["git", "status", "-s"], capture_output=True, text=True
     )
-    assert status_result.stdout is not None
-    return len(status_result.stdout) > 0
+    return bool(status_result.stdout)
 
 
-def delete(item: Path):
+def delete(item: Path) -> None:
     """
-    Delete either a file or a folder
+    Delete either a file or a folder with backup mechanism
     """
-    from shutil import rmtree
-
     item = Path(item)
     item_new = item.parent / f"REMOVE.{item.name}"
     item.rename(item_new)
@@ -57,25 +63,22 @@ def delete(item: Path):
         item_new.unlink(missing_ok=True)
 
 
-NEWS_LIST = []
-
-
-def warning_news(message: str):
+def warning_news(message: str) -> None:
+    """
+    Add a message to the news list and log it as a warning
+    """
     NEWS_LIST.append(message)
     logger.warning(message)
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
-
-HOMEFINDER_FIND_FOLDERS = [".config", "AppData"]
-HOMEFINDER_IGNORE_FOLDERS = ["dosdevices", "nixpkgs", ".git", ".cache"]
-HOMEFINDER_DOCUMENTS_FOLDER = ["Documentos", "Documents"]
+def get_hostname() -> str:
+    """
+    Get hostname of this machine to report it in the commit
+    """
+    return socket.gethostname()
 
 
-def main():
+def main() -> None:
     global GIT_BIN
     config = ConfigParser()
     config["general"] = {}
@@ -124,16 +127,18 @@ def main():
 
     args = parser.parse_args()
 
-    if args.git:
-        assert GIT_BIN is not None, "git required but not available"
+    if args.git and GIT_BIN is None:
+        raise AssertionError("git required but not available")
 
     if not args.git:
         GIT_BIN = None
 
-    assert args.config.is_file(), "Configuration file is not actually a file"
-    assert (
-        args.output.is_dir() or not args.output.exists()
-    ), "Output folder is not actually a folder"
+    if not args.config.is_file():
+        raise AssertionError("Configuration file is not actually a file")
+
+    if not (args.output.is_dir() or not args.output.exists()):
+        raise AssertionError("Output folder is not actually a folder")
+
     if not args.output.exists():
         args.output.mkdir(exist_ok=True, parents=True)
 
@@ -143,41 +148,28 @@ def main():
     logger.debug("loading configuration file")
     config.read(args.config)
 
-    """
-    Config file helpers
-    """
-
+    # Config file helpers
     def get_str(section: str, key: str) -> Optional[str]:
-        if section not in config:
-            return None
-        if key not in config[section]:
+        if section not in config or key not in config[section]:
             return None
         return config[section][key]
 
     def get_list(section: str, key: str) -> Optional[List[str]]:
-        divider = get_str("general", "divider")
+        divider = get_str("general", "divider") or ","
         raw = get_str(section, key) or ""
         raw = raw.strip()
-        if len(raw) == 0:
+        if not raw:
             return None
         return list(raw.split(divider))
 
-    def get_paths(section: str, key: str):
+    def get_paths(section: str, key: str) -> Set[Path]:
         ret = []
         for p in get_list(section, key) or []:
             ret.append(Path(os.path.expanduser(p)).resolve())
         return set(ret)
 
-    def get_bool(section: str, key: str):
+    def get_bool(section: str, key: str) -> bool:
         return get_str(section, key) is not None
-
-    def get_hostname() -> str:
-        """
-        Get hostname of this machine to report it in the commit
-        """
-        import socket
-
-        return socket.gethostname()
 
     hostname = get_hostname()
     ignored_paths = get_paths("search", "ignore")
@@ -188,6 +180,7 @@ def main():
 
     os.chdir(str(args.output))
 
+    # Initialize git repository if needed
     if args.git:
         if not (args.output / ".git").exists():
             git("init", "--initial-branch", "master")
@@ -195,160 +188,52 @@ def main():
         if is_repo_initially_dirty:
             git("add", "-A")
             git("stash", "push")
-        if is_repo_initially_dirty:
             git("stash", "pop")
             git("add", "-A")
             git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
-    def ingest_path(app: str, rule_name: str, path: str, top_level=False):
+    def is_path_ignored(path) -> bool:
         """
-        Ingest a path for an app and rulename
-
-        top_level is a strategy to keep track of items for the backlink feature
+        Is the path in the list of ignored paths?
         """
-        try:
-            if is_path_ignored(path):
-                return
-            path = str(path)
-            ppath = Path(path)
-            output_dir = args.output / app / rule_name
-            if not output_dir.exists():
-                output_dir.mkdir(exist_ok=True, parents=True)
-            if "*" in path:
-                top_level = False
-                filename = ppath.name
-                parent = ppath.parent
-                assert (
-                    "*" not in str(parent)
-                ), f"globs in any path segment but the last are unsupported. This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
-                names = set(
-                    [
-                        x.name
-                        for x in [*parent.glob(filename), *output_dir.glob(filename)]
-                    ]
-                )
-                for name in names:
-                    item = parent / name
-                    new_rule_name = rule_name
-                    if item.is_dir():
-                        new_rule_name = str(Path(new_rule_name) / item.name)
-                    ingest_path(app, new_rule_name, parent / name, top_level=True)
-            elif ppath.exists():
-                logger.info(f"ingest '{str(path)}' '{str(output_dir)}'")
-                copy_item(ppath, output_dir)
-                if args.git:
-                    if git_is_repo_dirty():
-                        commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
-                        git("add", "-A")
-                        git("commit", "-m", commit)
-            # backlink logic
-            if args.backlink and top_level:
-                logger.debug(
-                    f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}"
-                )
-                ppath.parent.mkdir(parents=True, exist_ok=True)
-                if ppath.is_symlink():
-                    ppath.unlink()  # recreate
-                elif ppath.exists():
-                    delete(ppath)
-                # if output_dir.name != ppath.name:
-                #     output_dir = output_dir / ppath.name
-                logger.info(f"ln {ppath} -> {output_dir}")
-                ppath.symlink_to(output_dir)
-            if ppath.is_symlink() and not ppath.exists():
-                warning_news(
-                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location."
-                )
-        except Exception as e:
-            warning_news(
-                f"while ingesting app={app} rule={rule_name} path={path}: {type(e)} {e}"
-            )
+        path_str = str(path)
+        return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
 
-    RULES_DIR = [Path(__file__).parents[0] / "rules", args.output / "__rules__"]
-    RULES_DIR[1].mkdir(exist_ok=True, parents=True)
-
-    apps = set()
-    required_vars = defaultdict(lambda: set())
-    var_users = defaultdict(lambda: set())
-    all_vars = set()
-    rulefiles = {}
-
-    def parse_rules(app: str):
-        """
-        Parse rules from one app
-        """
-        rulefile = rulefiles[app]
-        logger.debug(f"loading rule '{rulefile}'")
-        for line in Path(rulefile).read_text().split("\n"):
-            rule = line.strip()
-            if len(rule) > 0:
-                parts = rule.split(" ")
-                rule_name = parts[0]
-                if get_bool(app, f"ignore_{rule_name}"):
-                    continue
-                rule_path = " ".join(parts[1:])
-                # print('rule', rule_name, rule_path)
-                yield rule_name.strip(), rule_path.strip()
-
-    # load rules
-    rules_amount = 0
-
-    for ruledir in RULES_DIR:
-        if not ruledir.is_dir():
-            continue
-        for rulefile in ruledir.glob("*.txt"):
-            appname = rulefile.stem
-            apps.add(appname)
-            rulefiles[appname] = rulefile
-
-            for rule_name, rule_path in parse_rules(appname):
-                variables = list(re.match(r"\$([a-z]*)", rule_path).groups())
-                if len(variables) == 0:
-                    ingest_path(appname, rule_name, rule_path)
-                    continue
-                for var in variables:
-                    required_vars[appname].add(var)
-                    all_vars.add(var)
-                    var_users[var].add(appname)
-                rules_amount += 1
-
-    logger.debug(f"loaded {rules_amount} rules for {len(apps)} apps")
-    logger.debug(f"all apps with rules loaded: {pformat(apps)}")
-    logger.debug(f"all variables mentioned in rules: {all_vars}")
-
-    def copy_item(input_item, destination, depth=0):
+    def copy_item(input_item: Path, destination: Path, depth: int = 0) -> None:
         """
         Copy either a file or a folder from source to destination
         """
-        from shutil import SameFileError, copyfile
-
         original_input_item = input_item
         input_item = Path(input_item.resolve())
         destination = Path(destination.resolve())
-        print("item", input_item, destination)
+
+        if args.verbose:
+            logger.debug(f"Evaluating copy: {input_item} -> {destination}")
+
         if not input_item.exists():
             return
+
         if str(input_item).startswith(str(args.output)):
             logger.warning(
                 (" " * depth)
                 + f"copy_item: Not copying '{input_item}': Origin is inside output"
             )
             return
+
         if original_input_item.is_symlink():
             logger.warning(
-                (
-                    " " * depth,
-                    +f"copy_item: Not copying '{input_item}' because it's a symlink",
-                )
+                (" " * depth)
+                + f"copy_item: Not copying '{input_item}' because it's a symlink"
             )
             return
+
         if input_item.is_file():
             destination.parent.mkdir(exist_ok=True, parents=True)
             if destination.exists():
                 if input_item.stat().st_mtime < destination.stat().st_mtime:
                     if args.verbose:
                         logger.debug(
-                            ("" * depth)
+                            (" " * depth)
                             + f"copy_item: Not copying '{input_item}': Didn't change"
                         )
                     return
@@ -359,147 +244,275 @@ def main():
                 copyfile(input_item, destination)
             except SameFileError:
                 pass
-        if input_item.is_dir():
+
+        elif input_item.is_dir():
             destination.mkdir(exist_ok=True, parents=True)
-            for item in map(lambda x: x.name, input_item.iterdir()):
-                copy_item(input_item / item, destination / item, depth=depth + 1)
+            for item in input_item.iterdir():
+                copy_item(input_item / item.name, destination / item.name, depth=depth + 1)
 
-    def is_path_ignored(path) -> bool:
+    def ingest_path(app: str, rule_name: str, path: str, top_level: bool = False) -> None:
         """
-        Is the path in the list of ignored paths?
-        """
-        for ignored in ignored_paths:
-            if str(path).startswith(str(ignored)):
-                logger.info(f"copy_item: Path ignored: {path}")
-                return True
-        return False
+        Ingest a path for an app and rulename
 
+        top_level is a strategy to keep track of items for the backlink feature
+        """
+        try:
+            if is_path_ignored(path):
+                return
+
+            path = str(path)
+            ppath = Path(path)
+            output_dir = args.output / app / rule_name
+
+            if not output_dir.exists():
+                output_dir.mkdir(exist_ok=True, parents=True)
+
+            if "*" in path:
+                top_level = False
+                filename = ppath.name
+                parent = ppath.parent
+
+                if "*" in str(parent):
+                    raise AssertionError(
+                        f"globs in any path segment but the last are unsupported. "
+                        f"This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
+                    )
+
+                names = set(
+                    [
+                        x.name
+                        for x in [*parent.glob(filename), *output_dir.glob(filename)]
+                    ]
+                )
+
+                for name in names:
+                    item = parent / name
+                    new_rule_name = rule_name
+                    if item.is_dir():
+                        new_rule_name = str(Path(new_rule_name) / item.name)
+                    ingest_path(app, new_rule_name, str(parent / name), top_level=True)
+
+            elif ppath.exists():
+                logger.info(f"ingest '{path}' '{str(output_dir)}'")
+                copy_item(ppath, output_dir)
+
+                if args.git and git_is_repo_dirty():
+                    commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
+                    git("add", "-A")
+                    git("commit", "-m", commit)
+
+            # backlink logic
+            if args.backlink and top_level:
+                logger.debug(f"TOPLEVEL: {app} {rule_name} {path} {Path(path).resolve()}")
+                ppath.parent.mkdir(parents=True, exist_ok=True)
+
+                if ppath.is_symlink():
+                    ppath.unlink()  # recreate
+                elif ppath.exists():
+                    delete(ppath)
+
+                logger.info(f"ln {ppath} -> {output_dir}")
+                ppath.symlink_to(output_dir)
+
+            if ppath.is_symlink() and not ppath.exists():
+                warning_news(
+                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location."
+                )
+
+        except Exception as e:
+            warning_news(
+                f"while ingesting app={app} rule={rule_name} path={path}: {type(e)} {e}"
+            )
+
+    RULES_DIR = [Path(__file__).parents[0] / "rules", args.output / "__rules__"]
+    RULES_DIR[1].mkdir(exist_ok=True, parents=True)
+
+    apps = set()
+    required_vars = defaultdict(set)
+    var_users = defaultdict(set)
+    all_vars = set()
+    rulefiles = {}
+
+    def parse_rules(app: str) -> Iterator[Tuple[str, str]]:
+        """
+        Parse rules from one app
+        """
+        rulefile = rulefiles[app]
+        logger.debug(f"loading rule '{rulefile}'")
+        for line in Path(rulefile).read_text().split("\n"):
+            rule = line.strip()
+            if rule:
+                parts = rule.split(" ", 1)  # Split only on first space
+                if len(parts) == 2:
+                    rule_name, rule_path = parts
+                    if not get_bool(app, f"ignore_{rule_name}"):
+                        yield rule_name.strip(), rule_path.strip()
+
+    # Load rules
+    rules_amount = 0
+
+    for ruledir in RULES_DIR:
+        if not ruledir.is_dir():
+            continue
+
+        for rulefile in ruledir.glob("*.txt"):
+            appname = rulefile.stem
+            apps.add(appname)
+            rulefiles[appname] = rulefile
+
+            for rule_name, rule_path in parse_rules(appname):
+                match = re.search(r"\$([a-z]*)", rule_path)
+                variables = list(match.groups()) if match else []
+
+                if not variables:
+                    ingest_path(appname, rule_name, rule_path)
+                    continue
+
+                for var in variables:
+                    required_vars[appname].add(var)
+                    all_vars.add(var)
+                    var_users[var].add(appname)
+
+                rules_amount += 1
+
+    logger.debug(f"loaded {rules_amount} rules for {len(apps)} apps")
+    logger.debug(f"all apps with rules loaded: {pformat(apps)}")
+    logger.debug(f"all variables mentioned in rules: {all_vars}")
+
+    # Process games that use installdir variable
     for game in var_users["installdir"]:
         game_install_dirs = get_paths(game, "installdir")
-        if game_install_dirs is None:
+        if not game_install_dirs:
             if get_str(game, "not_installed") is None:
                 warning_news(
-                    f"installdir missing for game {game}, please add it in the game configuration section or set anything to not_installed to disable this warning"
+                    f"installdir missing for game {game}, please add it in the game configuration section "
+                    f"or set anything to not_installed to disable this warning"
                 )
             continue
+
         for game_install_dir in game_install_dirs:
             if not game_install_dir.exists():
-                warning_news(
-                    f"Game install dir for {game} doesn't exist: {game_install_dir}"
-                )
+                warning_news(f"Game install dir for {game} doesn't exist: {game_install_dir}")
                 continue
+
             if is_path_ignored(game_install_dir):
                 continue
+
             for rule_name, rule_path in parse_rules(game):
                 resolved_rule_path = rule_path.replace(
                     "$installdir", str(game_install_dir.resolve())
                 )
+
                 if rule_path == resolved_rule_path:
                     continue
+
                 ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
-    def search_for_homes(start_dir, max_depth=args.max_depth):
+    def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
         """
         Return an iterator of home dirs found starting from one start_dir
         """
-        if max_depth <= 0:
+        if max_depth <= 0 or start_dir.is_symlink() or not start_dir.is_dir() or \
+           is_path_ignored(start_dir) or start_dir.name in HOMEFINDER_IGNORE_FOLDERS:
             return
-        if start_dir.is_symlink():
-            return
-        if not start_dir.is_dir():
-            return
-        if is_path_ignored(start_dir):
-            return
-        if start_dir.name in HOMEFINDER_IGNORE_FOLDERS:
-            return
+
         try:
             for pattern in HOMEFINDER_FIND_FOLDERS:
                 if (start_dir / pattern).exists():
                     yield start_dir
                     break
-            for item in start_dir.iterdir():
-                for home in search_for_homes(item, max_depth=max_depth - 1):
-                    yield home
-        except PermissionError:
-            return
 
-    def get_homes():
+            for item in start_dir.iterdir():
+                yield from search_for_homes(item, max_depth=max_depth - 1)
+
+        except PermissionError:
+            pass
+
+    def get_homes() -> Iterator[Path]:
         """
         Get all homes using data from the config file and search_for_homes
         """
         extra_homes = get_paths("search", "extra_homes")
-        if extra_homes is not None:
+        if extra_homes:
             for home in extra_homes:
                 if is_path_ignored(home):
                     continue
+
                 if not home.exists():
                     warning_news(f"extra home '{str(home)}' does not exist")
                 else:
                     yield home
-        for search_path in get_paths("search", "paths"):
-            for home in search_for_homes(search_path):
-                yield home
 
+        for search_path in get_paths("search", "paths"):
+            yield from search_for_homes(search_path)
+    ALL_HOMES = []
     try:
-        ALL_HOMES = []
         for homedir in get_homes():
             if is_path_ignored(homedir):
                 continue
+
             ALL_HOMES.append(homedir)
             logger.debug(f"Looking for stuff in {str(homedir)}")
+
+            # Process home variable
             for game in var_users.get("home") or []:
                 for rule_name, rule_path in parse_rules(game):
                     resolved_rule_path = rule_path.replace("$home", str(homedir))
-                    if rule_path == resolved_rule_path:
-                        continue
-                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                    if rule_path != resolved_rule_path:
+                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
+            # Process appdata variable
             for game in var_users["appdata"]:
                 appdata = homedir / "AppData"
                 for rule_name, rule_path in parse_rules(game):
                     resolved_rule_path = rule_path.replace("$appdata", str(appdata))
-                    if rule_path == resolved_rule_path:
-                        continue
-                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                    if rule_path != resolved_rule_path:
+                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
+            # Find program files and process related variables
             has_program_files = False
             for program_files_candidate in homedir.parent.parent.iterdir():
                 try:
                     if not (program_files_candidate / "Common Files").exists():
                         continue
+
                     has_program_files = True
                     program_files = program_files_candidate
+
+                    # Process program_files variable
                     for game in var_users["program_files"]:
                         for rule_name, rule_path in parse_rules(game):
                             resolved_rule_path = rule_path.replace(
                                 "$program_files", str(program_files)
                             )
-                            if rule_path == resolved_rule_path:
-                                continue
-                            ingest_path(
-                                game, rule_name, resolved_rule_path, top_level=True
-                            )
+                            if rule_path != resolved_rule_path:
+                                ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
+                    # Process Ubisoft specific files
                     ubisoft_users = set()
                     ubisoft_specific_dir = args.output / "ubisoft"
                     ubisoft_specific_dir.mkdir(parents=True, exist_ok=True)
                     ubisoft_users_file = ubisoft_specific_dir / "users.txt"
+
                     if ubisoft_users_file.exists():
-                        for user in ubisoft_users_file.read_text().strip().split("\n"):
-                            ubisoft_users.add(user)
+                        content = ubisoft_users_file.read_text().strip()
+                        if content:
+                            ubisoft_users.update(content.split("\n"))
+
                     ubisoft_savegame_dir = (
-                        program_files
-                        / "Ubisoft"
-                        / "Ubisoft Game Launcher"
-                        / "savegames"
+                        program_files / "Ubisoft" /
+                        "Ubisoft Game Launcher" / "savegames"
                     )
+
                     if ubisoft_savegame_dir.exists():
                         for ubisoft_user in ubisoft_savegame_dir.iterdir():
                             if ubisoft_user.is_dir():
                                 logger.debug(f"UBISOFT/iterdir: {ubisoft_user}")
                                 ubisoft_users.add(ubisoft_user.name)
+
                     ubisoft_users_file.write_text("\n".join(list(ubisoft_users)))
 
+                    # Process ubisoft variable
                     for ubisoft_user in ubisoft_users:
                         ubisoft_var = ubisoft_savegame_dir / ubisoft_user
                         for game in var_users["ubisoft"]:
@@ -507,34 +520,35 @@ def main():
                                 resolved_rule_path = rule_path.replace(
                                     "$ubisoft", str(ubisoft_var)
                                 )
-                                if rule_path == resolved_rule_path:
-                                    continue
-                                logger.debug(
-                                    f"UBISOFT {resolved_rule_path} {ubisoft_users}"
-                                )
-                                ingest_path(
-                                    game, rule_name, resolved_rule_path, top_level=True
-                                )
+                                if rule_path != resolved_rule_path:
+                                    logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
+                                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+
                 except PermissionError:
                     has_program_files = True
                     continue
-                if not has_program_files:
-                    warning_news(
-                        f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. This is a bug and a proof that this implementation is incomplete. Please report. Context: https://twitter.com/lucas59356/status/1700965748611449086."
-                    )
 
+            if not has_program_files:
+                warning_news(
+                    f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. "
+                    f"This is a bug and a proof that this implementation is incomplete. Please report. "
+                    f"Context: https://twitter.com/lucas59356/status/1700965748611449086."
+                )
+
+            # Process documents variable
             for documents_candidate in HOMEFINDER_DOCUMENTS_FOLDER:
                 documents = homedir / documents_candidate
                 if not documents.exists():
                     continue
+
                 for game in var_users["documents"]:
                     for rule_name, rule_path in parse_rules(game):
                         resolved_rule_path = rule_path.replace(
                             "$documents", str(documents)
                         )
-                        if rule_path == resolved_rule_path:
-                            continue
-                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                        if rule_path != resolved_rule_path:
+                            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+
     finally:
         logger.info("Finishing up")
         finish_time = time()
@@ -548,15 +562,16 @@ def main():
         with (this_node_metric_dir / "run_times.txt").open("a") as f:
             print(f"{start_time},{finish_time - start_time}", file=f)
 
-        git("add", "-A")
-        git("commit", "-m", f"run report for {hostname}")
+        if args.git:
+            git("add", "-A")
+            git("commit", "-m", f"run report for {hostname}")
+            git("pull", "--rebase")
+            git("push", always_show=True)
 
-        git("pull", "--rebase")
-        git("push", always_show=True)
         logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
         logger.info("Done!")
 
-        if len(NEWS_LIST) > 0:
+        if NEWS_LIST:
             logger.warning("=== IMPORTANT INFORMATION ABOUT THE RUN ===")
             for item in NEWS_LIST:
                 logger.warning(f"- {item}")
