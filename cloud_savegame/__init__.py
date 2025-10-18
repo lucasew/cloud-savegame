@@ -26,6 +26,7 @@ HOMEFINDER_DOCUMENTS_FOLDER = ["Documentos", "Documents"]
 GIT_BIN = which("git")
 NEWS_LIST = []
 
+
 # Function to run git commands
 def git(*params, always_show=False) -> None:
     """
@@ -37,15 +38,15 @@ def git(*params, always_show=False) -> None:
     logger.info("git: %s", " ".join(f"'{p}'" for p in params))
     subprocess.call([GIT_BIN, *params])
 
+
 # Function to check if the Git repo has uncommitted files
 def git_is_repo_dirty() -> bool:
     """
     Check if the Git repo has uncommitted files
     """
-    status_result = subprocess.run(
-        ["git", "status", "-s"], capture_output=True, text=True
-    )
+    status_result = subprocess.run(["git", "status", "-s"], capture_output=True, text=True)
     return bool(status_result.stdout)
+
 
 # Function to delete either a file or a folder with backup mechanism
 def delete(item: Path) -> None:
@@ -62,6 +63,7 @@ def delete(item: Path) -> None:
     else:
         item_new.unlink(missing_ok=True)
 
+
 # Function to add a message to the news list and log it as a warning
 def warning_news(message: str) -> None:
     """
@@ -70,12 +72,14 @@ def warning_news(message: str) -> None:
     NEWS_LIST.append(message)
     logger.warning(message)
 
+
 # Function to get hostname of this machine to report it in the commit
 def get_hostname() -> str:
     """
     Get hostname of this machine to report it in the commit
     """
     return socket.gethostname()
+
 
 # Main function to handle the backup process
 def main() -> None:
@@ -217,15 +221,13 @@ def main() -> None:
 
         if str(input_item).startswith(str(args.output)):
             logger.warning(
-                (" " * depth)
-                + f"copy_item: Not copying '{input_item}': Origin is inside output"
+                (" " * depth) + f"copy_item: Not copying '{input_item}': Origin is inside output"
             )
             return
 
         if original_input_item.is_symlink():
             logger.warning(
-                (" " * depth)
-                + f"copy_item: Not copying '{input_item}' because it's a symlink"
+                (" " * depth) + f"copy_item: Not copying '{input_item}' because it's a symlink"
             )
             return
 
@@ -235,13 +237,10 @@ def main() -> None:
                 if input_item.stat().st_mtime < destination.stat().st_mtime:
                     if args.verbose:
                         logger.debug(
-                            (" " * depth)
-                            + f"copy_item: Not copying '{input_item}': Didn't change"
+                            (" " * depth) + f"copy_item: Not copying '{input_item}': Didn't change"
                         )
                     return
-            logger.info(
-                (" " * depth) + f"copy_item: Copying '{input_item}' to '{destination}'"
-            )
+            logger.info((" " * depth) + f"copy_item: Copying '{input_item}' to '{destination}'")
             try:
                 copyfile(input_item, destination)
             except SameFileError:
@@ -281,12 +280,7 @@ def main() -> None:
                         f"This is a rule bug. app={app} rule_name={rule_name} path='{path}'"
                     )
 
-                names = set(
-                    [
-                        x.name
-                        for x in [*parent.glob(filename), *output_dir.glob(filename)]
-                    ]
-                )
+                names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
 
                 for name in names:
                     item = parent / name
@@ -323,9 +317,7 @@ def main() -> None:
                 )
 
         except Exception as e:
-            warning_news(
-                f"while ingesting app={app} rule={rule_name} path={path}: {type(e)} {e}"
-            )
+            warning_news(f"while ingesting app={app} rule={rule_name} path={path}: {type(e)} {e}")
 
     RULES_DIR = [Path(__file__).parents[0] / "rules", args.output / "__rules__"]
     RULES_DIR[1].mkdir(exist_ok=True, parents=True)
@@ -417,8 +409,13 @@ def main() -> None:
         """
         Return an iterator of home dirs found starting from one start_dir
         """
-        if max_depth <= 0 or start_dir.is_symlink() or not start_dir.is_dir() or \
-           is_path_ignored(start_dir) or start_dir.name in HOMEFINDER_IGNORE_FOLDERS:
+        if (
+            max_depth <= 0
+            or start_dir.is_symlink()
+            or not start_dir.is_dir()
+            or is_path_ignored(start_dir)
+            or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
+        ):
             return
 
         try:
@@ -451,6 +448,7 @@ def main() -> None:
 
         for search_path in get_paths("search", "paths"):
             yield from search_for_homes(search_path)
+
     ALL_HOMES = []
     try:
         for homedir in get_homes():
@@ -506,8 +504,7 @@ def main() -> None:
                             ubisoft_users.update(content.split("\n"))
 
                     ubisoft_savegame_dir = (
-                        program_files / "Ubisoft" /
-                        "Ubisoft Game Launcher" / "savegames"
+                        program_files / "Ubisoft" / "Ubisoft Game Launcher" / "savegames"
                     )
 
                     if ubisoft_savegame_dir.exists():
@@ -523,9 +520,7 @@ def main() -> None:
                         ubisoft_var = ubisoft_savegame_dir / ubisoft_user
                         for game in var_users["ubisoft"]:
                             for rule_name, rule_path in parse_rules(game):
-                                resolved_rule_path = rule_path.replace(
-                                    "$ubisoft", str(ubisoft_var)
-                                )
+                                resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
                                 if rule_path != resolved_rule_path:
                                     logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
                                     ingest_path(game, rule_name, resolved_rule_path, top_level=True)
@@ -549,9 +544,7 @@ def main() -> None:
 
                 for game in var_users["documents"]:
                     for rule_name, rule_path in parse_rules(game):
-                        resolved_rule_path = rule_path.replace(
-                            "$documents", str(documents)
-                        )
+                        resolved_rule_path = rule_path.replace("$documents", str(documents))
                         if rule_path != resolved_rule_path:
                             ingest_path(game, rule_name, resolved_rule_path, top_level=True)
 
