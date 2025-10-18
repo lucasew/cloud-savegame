@@ -12,7 +12,7 @@ from pathlib import Path
 from pprint import pformat
 from shutil import SameFileError, copyfile, rmtree, which
 from time import time
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Iterator, List, Optional, Set, Tuple
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -313,7 +313,7 @@ def main() -> None:
 
             if ppath.is_symlink() and not ppath.exists():
                 warning_news(
-                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location."
+                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location." # noqa:E501
                 )
 
         except Exception as e:
@@ -381,7 +381,7 @@ def main() -> None:
         if not game_install_dirs:
             if get_str(game, "not_installed") is None:
                 warning_news(
-                    f"installdir missing for game {game}, please add it in the game configuration section "
+                    f"installdir missing for game {game}, please add it in the game configuration section "  # noqa: E501
                     f"or set anything to not_installed to disable this warning"
                 )
             continue
@@ -531,8 +531,8 @@ def main() -> None:
 
             if not has_program_files:
                 warning_news(
-                    f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files. "
-                    f"This is a bug and a proof that this implementation is incomplete. Please report. "
+                    f"home '{homedir}' is neither a Linux home nor has a Windows-like Program Files."  # noqa: E501
+                    f"This is a bug and a proof that this implementation is incomplete. Please report."  # noqa: E501
                     f"Context: https://twitter.com/lucas59356/status/1700965748611449086."
                 )
 
