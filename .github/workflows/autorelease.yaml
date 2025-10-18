@@ -62,9 +62,6 @@ jobs:
           exit 1
         fi
 
-    - name: Build wheel
-      run: uv build
-
     - name: Make release if everything looks right
       if: github.event_name != 'pull_request'
       env:
@@ -75,6 +72,9 @@ jobs:
           echo "New version: $(cat ./cloud_savegame/VERSION)" >> $GITHUB_STEP_SUMMARY
           echo "RELEASE_VERSION=$(cat ./cloud_savegame/VERSION)" >> $GITHUB_ENV
         fi
+
+    - name: Build wheel
+      run: uv build
 
     - name: Create release
       if: github.event_name != 'pull_request' && env.RELEASE_VERSION != ''
