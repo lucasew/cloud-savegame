@@ -3,16 +3,16 @@
 import logging
 import os
 import re
+import socket
 import subprocess
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from collections import defaultdict
 from configparser import ConfigParser
 from pathlib import Path
 from pprint import pformat
-from shutil import which, copyfile, SameFileError, rmtree
+from shutil import SameFileError, copyfile, rmtree, which
 from time import time
-from typing import List, Optional, Set, Dict, Tuple, Iterator
-import socket
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

@@ -3,7 +3,7 @@ uv = "0.8.17"
 ruff = "0.14.0"
 
 [tasks.format]
-run = "ruff format"
+run = "ruff format && ruff check --fix"
 
 [tasks.lint]
 run = "ruff check"
