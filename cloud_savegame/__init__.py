@@ -313,7 +313,7 @@ def main() -> None:
 
             if ppath.is_symlink() and not ppath.exists():
                 warning_news(
-                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location." # noqa:E501
+                    f"This may be a rule or a program bug: '{ppath}' points to a non existent location."  # noqa:E501
                 )
 
         except Exception as e:
