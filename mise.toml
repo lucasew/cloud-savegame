@@ -1,5 +1,5 @@
 [tools]
-uv = "0.8.17"
+uv = "0.9.4"
 ruff = "0.14.1"
 
 [tasks.format]
