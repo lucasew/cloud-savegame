@@ -1,6 +1,6 @@
 [tools]
 uv = "0.9.5"
-ruff = "0.14.1"
+ruff = "0.14.2"
 
 [tasks.format]
 run = "ruff format && ruff check --fix"
