@@ -81,6 +81,33 @@ def get_hostname() -> str:
     return socket.gethostname()
 
 
+# Config file helpers
+def get_str(config: ConfigParser, section: str, key: str) -> Optional[str]:
+    if section not in config or key not in config[section]:
+        return None
+    return config[section][key]
+
+
+def get_list(config: ConfigParser, section: str, key: str) -> Optional[List[str]]:
+    divider = get_str(config, "general", "divider") or ","
+    raw = get_str(config, section, key) or ""
+    raw = raw.strip()
+    if not raw:
+        return None
+    return list(raw.split(divider))
+
+
+def get_paths(config: ConfigParser, section: str, key: str) -> Set[Path]:
+    ret = []
+    for p in get_list(config, section, key) or []:
+        ret.append(Path(os.path.expanduser(p)).resolve())
+    return set(ret)
+
+
+def get_bool(config: ConfigParser, section: str, key: str) -> bool:
+    return get_str(config, section, key) is not None
+
+
 # Main function to handle the backup process
 def main() -> None:
     global GIT_BIN
@@ -152,31 +179,8 @@ def main() -> None:
     logger.debug("loading configuration file")
     config.read(args.config)
 
-    # Config file helpers
-    def get_str(section: str, key: str) -> Optional[str]:
-        if section not in config or key not in config[section]:
-            return None
-        return config[section][key]
-
-    def get_list(section: str, key: str) -> Optional[List[str]]:
-        divider = get_str("general", "divider") or ","
-        raw = get_str(section, key) or ""
-        raw = raw.strip()
-        if not raw:
-            return None
-        return list(raw.split(divider))
-
-    def get_paths(section: str, key: str) -> Set[Path]:
-        ret = []
-        for p in get_list(section, key) or []:
-            ret.append(Path(os.path.expanduser(p)).resolve())
-        return set(ret)
-
-    def get_bool(section: str, key: str) -> bool:
-        return get_str(section, key) is not None
-
     hostname = get_hostname()
-    ignored_paths = get_paths("search", "ignore")
+    ignored_paths = get_paths(config, "search", "ignore")
     logger.debug("parsed config file:")
     logger.debug({section: dict(config[section]) for section in config.sections()})
 
@@ -341,7 +345,7 @@ def main() -> None:
                 parts = rule.split(" ", 1)  # Split only on first space
                 if len(parts) == 2:
                     rule_name, rule_path = parts
-                    if not get_bool(app, f"ignore_{rule_name}"):
+                    if not get_bool(config, app, f"ignore_{rule_name}"):
                         yield rule_name.strip(), rule_path.strip()
 
     # Load rules
@@ -377,9 +381,9 @@ def main() -> None:
 
     # Process games that use installdir variable
     for game in var_users["installdir"]:
-        game_install_dirs = get_paths(game, "installdir")
+        game_install_dirs = get_paths(config, game, "installdir")
         if not game_install_dirs:
-            if get_str(game, "not_installed") is None:
+            if get_str(config, game, "not_installed") is None:
                 warning_news(
                     f"installdir missing for game {game}, please add it in the game configuration section "  # noqa: E501
                     f"or set anything to not_installed to disable this warning"
@@ -435,7 +439,7 @@ def main() -> None:
         """
         Get all homes using data from the config file and search_for_homes
         """
-        extra_homes = get_paths("search", "extra_homes")
+        extra_homes = get_paths(config, "search", "extra_homes")
         if extra_homes:
             for home in extra_homes:
                 if is_path_ignored(home):
@@ -446,7 +450,7 @@ def main() -> None:
                 else:
                     yield home
 
-        for search_path in get_paths("search", "paths"):
+        for search_path in get_paths(config, "search", "paths"):
             yield from search_for_homes(search_path)
 
     ALL_HOMES = []
