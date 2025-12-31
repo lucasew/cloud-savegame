@@ -259,13 +259,35 @@ def main() -> None:
                 copy_item(input_item / item.name, destination / item.name, depth=depth + 1)
 
     # Function to ingest a path for an app and rulename
-    def ingest_path(app: str, rule_name: str, path: str, top_level: bool = False) -> None:
+def ingest_path(
+    app: str, rule_name: str, path: str, top_level: bool = False, base_path: Optional[Path] = None
+) -> None:
         """
         Ingest a path for an app and rulename
 
         top_level is a strategy to keep track of items for the backlink feature
         """
         try:
+        # Security: If a base_path is provided, resolve the input path and ensure
+        # it is a child of the base_path. This prevents path traversal.
+        if base_path:
+            try:
+                resolved_path = Path(path).resolve()
+                if not str(resolved_path).startswith(str(base_path.resolve())):
+                    warning_news(
+                        f"Security: Path '{path}' for app '{app}' resolves outside of its base '{base_path}'. Skipping."
+                    )
+                    return
+            except FileNotFoundError:
+                # Path might be a glob that doesn't exist yet. Check will happen on recursion.
+                pass
+        # Security: Disallow absolute paths that don't come from a variable, as they are untrusted.
+        elif "*" not in path and Path(path).is_absolute():
+            warning_news(
+                f"Security: Absolute path '{path}' for app '{app}' is not allowed in rules. Skipping."
+            )
+            return
+
             if is_path_ignored(path):
                 return
 
@@ -294,7 +316,7 @@ def main() -> None:
                     new_rule_name = rule_name
                     if item.is_dir():
                         new_rule_name = str(Path(new_rule_name) / item.name)
-                    ingest_path(app, new_rule_name, str(parent / name), top_level=True)
+                ingest_path(app, new_rule_name, str(parent / name), top_level=True, base_path=base_path)
 
             elif ppath.exists():
                 logger.info(f"ingest '{path}' '{str(output_dir)}'")
@@ -409,7 +431,9 @@ def main() -> None:
                 if rule_path == resolved_rule_path:
                     continue
 
-                ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                ingest_path(
+                    game, rule_name, resolved_rule_path, top_level=True, base_path=game_install_dir
+                )
 
     # Function to search for home directories
     def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
@@ -470,7 +494,9 @@ def main() -> None:
                 for rule_name, rule_path in parse_rules(game):
                     resolved_rule_path = rule_path.replace("$home", str(homedir))
                     if rule_path != resolved_rule_path:
-                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                        ingest_path(
+                            game, rule_name, resolved_rule_path, top_level=True, base_path=homedir
+                        )
 
             # Process appdata variable
             for game in var_users["appdata"]:
@@ -478,7 +504,9 @@ def main() -> None:
                 for rule_name, rule_path in parse_rules(game):
                     resolved_rule_path = rule_path.replace("$appdata", str(appdata))
                     if rule_path != resolved_rule_path:
-                        ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                        ingest_path(
+                            game, rule_name, resolved_rule_path, top_level=True, base_path=appdata
+                        )
 
             # Find program files and process related variables
             has_program_files = False
@@ -497,7 +525,13 @@ def main() -> None:
                                 "$program_files", str(program_files)
                             )
                             if rule_path != resolved_rule_path:
-                                ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                                ingest_path(
+                                    game,
+                                    rule_name,
+                                    resolved_rule_path,
+                                    top_level=True,
+                                    base_path=program_files,
+                                )
 
                     # Process Ubisoft specific files
                     ubisoft_users = set()
@@ -530,7 +564,13 @@ def main() -> None:
                                 resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
                                 if rule_path != resolved_rule_path:
                                     logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
-                                    ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                                    ingest_path(
+                                        game,
+                                        rule_name,
+                                        resolved_rule_path,
+                                        top_level=True,
+                                        base_path=ubisoft_var,
+                                    )
 
                 except PermissionError:
                     has_program_files = True
@@ -553,7 +593,13 @@ def main() -> None:
                     for rule_name, rule_path in parse_rules(game):
                         resolved_rule_path = rule_path.replace("$documents", str(documents))
                         if rule_path != resolved_rule_path:
-                            ingest_path(game, rule_name, resolved_rule_path, top_level=True)
+                            ingest_path(
+                                game,
+                                rule_name,
+                                resolved_rule_path,
+                                top_level=True,
+                                base_path=documents,
+                            )
 
     finally:
         logger.info("Finishing up")
