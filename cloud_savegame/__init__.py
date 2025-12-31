@@ -176,6 +176,8 @@ def main() -> None:
     if not args.output.exists():
         args.output.mkdir(exist_ok=True, parents=True)
 
+    args.output = args.output.resolve()
+
     if args.verbose:
         logging.root.setLevel(logging.DEBUG)
 
@@ -302,9 +304,6 @@ def main() -> None:
             ppath = Path(path)
             output_dir = args.output / app / rule_name
 
-            if not output_dir.exists():
-                output_dir.mkdir(exist_ok=True, parents=True)
-
             if "*" in path:
                 top_level = False
                 filename = ppath.name
@@ -320,12 +319,14 @@ def main() -> None:
 
                 for name in names:
                     item = parent / name
-                    new_rule_name = rule_name
-                    if item.is_dir():
-                        new_rule_name = str(Path(new_rule_name) / item.name)
-                ingest_path(
-                    app, new_rule_name, str(parent / name), top_level=True, base_path=base_path
-                )
+                    new_rule_name = str(Path(rule_name) / item.name)
+                    ingest_path(
+                        app,
+                        new_rule_name,
+                        str(parent / name),
+                        top_level=True,
+                        base_path=base_path or parent,
+                    )
 
             elif ppath.exists():
                 logger.info(f"ingest '{path}' '{str(output_dir)}'")
