@@ -48,20 +48,23 @@ def git_is_repo_dirty() -> bool:
     return bool(status_result.stdout)
 
 
-# Function to delete either a file or a folder with backup mechanism
-def delete(item: Path) -> None:
+# Function to move a file or folder to a backup directory to prevent accidental deletion
+def backup_item(item: Path, output_dir: Path) -> None:
     """
-    Delete either a file or a folder with backup mechanism
+    Move a file or folder to a backup directory to prevent accidental deletion.
     """
+    backup_dir = output_dir / "__backup__"
+    backup_dir.mkdir(exist_ok=True, parents=True)
+
+    # Add timestamp to avoid name collisions
+    backup_target = backup_dir / f"{item.name}.{int(time())}"
+
     item = Path(item)
-    item_new = item.parent / f"REMOVE.{item.name}"
-    item.rename(item_new)
-    logger.info(f"rm: {item}")
-    warning_news(f"rm: removed item '{item}'. It was moved to {item_new}.")
-    if item_new.is_dir():
-        rmtree(str(item_new))
-    else:
-        item_new.unlink(missing_ok=True)
+    item.rename(backup_target)
+    logger.info(f"Moved '{item}' to backup at '{backup_target}'")
+    warning_news(
+        f"Moved potentially conflicting item '{item}' to the backup directory at '{backup_target}'."
+    )
 
 
 # Function to add a message to the news list and log it as a warning
@@ -310,7 +313,7 @@ def main() -> None:
                 if ppath.is_symlink():
                     ppath.unlink()  # recreate
                 elif ppath.exists():
-                    delete(ppath)
+                    backup_item(ppath, args.output)
 
                 logger.info(f"ln {ppath} -> {output_dir}")
                 ppath.symlink_to(output_dir)
