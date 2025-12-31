@@ -1,4 +1,3 @@
-
 name: Autorelease
 
 on:
@@ -15,8 +14,13 @@ on:
       new_version:
         description: 'New tag version'
         default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
   schedule:
-    - cron: '0 2 * * 6' # saturday 2am
+  - cron: '0 2 * * 6'   # saturday 2am
 jobs:
   autorelease:
     env:
@@ -79,9 +83,9 @@ jobs:
     - name: Create release
       if: github.event_name != 'pull_request' && env.RELEASE_VERSION != ''
       env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ env.RELEASE_VERSION }}
-          TITLE: Release ${{ env.RELEASE_VERSION }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ env.RELEASE_VERSION }}
+        TITLE: Release ${{ env.RELEASE_VERSION }}
       run: |
         gh release create "$TAG" \
           --title "$TITLE" \
