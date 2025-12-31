@@ -10,7 +10,7 @@ from collections import defaultdict
 from configparser import ConfigParser
 from pathlib import Path
 from pprint import pformat
-from shutil import SameFileError, copyfile, rmtree, which
+from shutil import SameFileError, copyfile, which
 from time import time
 from typing import Iterator, List, Optional, Set, Tuple
 
@@ -259,34 +259,41 @@ def main() -> None:
                 copy_item(input_item / item.name, destination / item.name, depth=depth + 1)
 
     # Function to ingest a path for an app and rulename
-def ingest_path(
-    app: str, rule_name: str, path: str, top_level: bool = False, base_path: Optional[Path] = None
-) -> None:
+    def ingest_path(
+        app: str,
+        rule_name: str,
+        path: str,
+        top_level: bool = False,
+        base_path: Optional[Path] = None,
+    ) -> None:
         """
         Ingest a path for an app and rulename
 
         top_level is a strategy to keep track of items for the backlink feature
         """
         try:
-        # Security: If a base_path is provided, resolve the input path and ensure
-        # it is a child of the base_path. This prevents path traversal.
-        if base_path:
-            try:
-                resolved_path = Path(path).resolve()
-                if not str(resolved_path).startswith(str(base_path.resolve())):
-                    warning_news(
-                        f"Security: Path '{path}' for app '{app}' resolves outside of its base '{base_path}'. Skipping."
-                    )
-                    return
-            except FileNotFoundError:
-                # Path might be a glob that doesn't exist yet. Check will happen on recursion.
-                pass
-        # Security: Disallow absolute paths that don't come from a variable, as they are untrusted.
-        elif "*" not in path and Path(path).is_absolute():
-            warning_news(
-                f"Security: Absolute path '{path}' for app '{app}' is not allowed in rules. Skipping."
-            )
-            return
+            # Security: If a base_path is provided, resolve the input path and ensure
+            # it is a child of the base_path. This prevents path traversal.
+            if base_path:
+                try:
+                    resolved_path = Path(path).resolve()
+                    if not str(resolved_path).startswith(str(base_path.resolve())):
+                        warning_news(
+                            f"Security: Path '{path}' for app '{app}' resolves outside of its "
+                            f"base '{base_path}'. Skipping."
+                        )
+                        return
+                except FileNotFoundError:
+                    # Path might be a glob that doesn't exist yet. Check will happen on recursion.
+                    pass
+            # Security: Disallow absolute paths that don't come from a variable,
+            # as they are untrusted.
+            elif "*" not in path and Path(path).is_absolute():
+                warning_news(
+                    f"Security: Absolute path '{path}' for app '{app}' "
+                    "is not allowed in rules. Skipping."
+                )
+                return
 
             if is_path_ignored(path):
                 return
@@ -316,7 +323,9 @@ def ingest_path(
                     new_rule_name = rule_name
                     if item.is_dir():
                         new_rule_name = str(Path(new_rule_name) / item.name)
-                ingest_path(app, new_rule_name, str(parent / name), top_level=True, base_path=base_path)
+                ingest_path(
+                    app, new_rule_name, str(parent / name), top_level=True, base_path=base_path
+                )
 
             elif ppath.exists():
                 logger.info(f"ingest '{path}' '{str(output_dir)}'")
