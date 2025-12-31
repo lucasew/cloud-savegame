@@ -1,1 +1,0 @@
-myrule /app/fake_game_data/*.dat
