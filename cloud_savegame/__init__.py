@@ -296,6 +296,20 @@ def main() -> None:
                     "is not allowed in rules. Skipping."
                 )
                 return
+            # Security: For relative paths, prevent traversing outside the output directory.
+            # This is necessary because the script chdirs into the output directory.
+            elif not Path(path).is_absolute():
+                try:
+                    # Resolve the path to its canonical form to prevent symlink bypasses
+                    resolved_path = Path(path).resolve()
+                    # Check if the resolved path is within the output directory
+                    resolved_path.relative_to(args.output.resolve())
+                except (ValueError, FileNotFoundError):
+                    warning_news(
+                        f"Security: Relative path '{path}' for app '{app}' attempts to traverse "
+                        f"outside the output directory '{args.output.resolve()}'. Skipping."
+                    )
+                    return
 
             if is_path_ignored(path):
                 return
