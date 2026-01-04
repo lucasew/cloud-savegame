@@ -12,7 +12,7 @@ from pathlib import Path
 from pprint import pformat
 from shutil import SameFileError, copyfile, which
 from time import time
-from typing import Iterator, List, Optional, Set, Tuple
+from typing import Callable, Iterator, List, Optional, Set, Tuple
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -109,6 +109,64 @@ def get_paths(config: ConfigParser, section: str, key: str) -> Set[Path]:
 
 def get_bool(config: ConfigParser, section: str, key: str) -> bool:
     return get_str(config, section, key) is not None
+
+
+# Function to search for home directories
+def search_for_homes(
+    start_dir: Path,
+    is_path_ignored: Callable[[Path], bool],
+    max_depth: int,
+) -> Iterator[Path]:
+    """
+    Return an iterator of home dirs found starting from one start_dir
+    """
+    if (
+        max_depth <= 0
+        or start_dir.is_symlink()
+        or not start_dir.is_dir()
+        or is_path_ignored(start_dir)
+        or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
+    ):
+        return
+
+    try:
+        for pattern in HOMEFINDER_FIND_FOLDERS:
+            if (start_dir / pattern).exists():
+                yield start_dir
+                break
+
+        for item in start_dir.iterdir():
+            yield from search_for_homes(
+                item,
+                is_path_ignored,
+                max_depth=max_depth - 1,
+            )
+
+    except PermissionError:
+        pass
+
+
+def get_homes(
+    config: ConfigParser,
+    is_path_ignored: Callable[[Path], bool],
+    max_depth: int,
+) -> Iterator[Path]:
+    """
+    Get all homes using data from the config file and search_for_homes
+    """
+    extra_homes = get_paths(config, "search", "extra_homes")
+    if extra_homes:
+        for home in extra_homes:
+            if is_path_ignored(home):
+                continue
+
+            if not home.exists():
+                warning_news(f"extra home '{str(home)}' does not exist")
+            else:
+                yield home
+
+    for search_path in get_paths(config, "search", "paths"):
+        yield from search_for_homes(search_path, is_path_ignored, max_depth)
 
 
 # Main function to handle the backup process
@@ -445,54 +503,9 @@ def main() -> None:
                     game, rule_name, resolved_rule_path, top_level=True, base_path=game_install_dir
                 )
 
-    # Function to search for home directories
-    def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
-        """
-        Return an iterator of home dirs found starting from one start_dir
-        """
-        if (
-            max_depth <= 0
-            or start_dir.is_symlink()
-            or not start_dir.is_dir()
-            or is_path_ignored(start_dir)
-            or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
-        ):
-            return
-
-        try:
-            for pattern in HOMEFINDER_FIND_FOLDERS:
-                if (start_dir / pattern).exists():
-                    yield start_dir
-                    break
-
-            for item in start_dir.iterdir():
-                yield from search_for_homes(item, max_depth=max_depth - 1)
-
-        except PermissionError:
-            pass
-
-    # Function to get all home directories
-    def get_homes() -> Iterator[Path]:
-        """
-        Get all homes using data from the config file and search_for_homes
-        """
-        extra_homes = get_paths(config, "search", "extra_homes")
-        if extra_homes:
-            for home in extra_homes:
-                if is_path_ignored(home):
-                    continue
-
-                if not home.exists():
-                    warning_news(f"extra home '{str(home)}' does not exist")
-                else:
-                    yield home
-
-        for search_path in get_paths(config, "search", "paths"):
-            yield from search_for_homes(search_path)
-
     ALL_HOMES = []
     try:
-        for homedir in get_homes():
+        for homedir in get_homes(config, is_path_ignored, args.max_depth):
             if is_path_ignored(homedir):
                 continue
 
