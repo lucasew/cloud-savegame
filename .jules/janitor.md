@@ -1,0 +1,5 @@
+## 2024-07-25 - Extract `copy_item` function to module scope
+**Issue:** The `copy_item` function was nested inside the `main` function in `cloud_savegame/__init__.py`. This nesting reduced readability and made the `main` function unnecessarily complex, as it was responsible for both high-level application logic and low-level file operations.
+**Root Cause:** The function was likely written as a small, localized helper and was never refactored out as the script grew. This is a common pattern in single-file scripts that evolve over time.
+**Solution:** I extracted the `copy_item` function and moved it to the module scope. To decouple it from the `main` function's context, I updated its signature to explicitly accept its dependencies (`output_dir` and `verbose`) as arguments.
+**Pattern:** The `main` function in `cloud_savegame/__init__.py` contains several nested helper functions. Extracting these helpers to the module scope is a good simplification pattern. Future refactorings should continue to move functions like `is_path_ignored` and `ingest_path` out of `main` to improve modularity and testability.
