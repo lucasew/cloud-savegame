@@ -302,7 +302,18 @@ def main() -> None:
 
             path = str(path)
             ppath = Path(path)
-            output_dir = args.output / app / rule_name
+
+            safe_base_dir = (args.output / app).resolve()
+            output_dir = (args.output / app / rule_name).resolve()
+
+            # Security: Ensure the output directory is within the intended app directory
+            # to prevent path traversal attacks.
+            safe_base_dir_str = str(safe_base_dir)
+            if not (str(output_dir) == safe_base_dir_str or str(output_dir).startswith(safe_base_dir_str + os.path.sep)):
+                warning_news(
+                    f"Security: Path traversal attempt detected in rule '{rule_name}' for app '{app}'. Skipping."
+                )
+                continue
 
             if "*" in path:
                 top_level = False
