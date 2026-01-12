@@ -111,6 +111,61 @@ def get_bool(config: ConfigParser, section: str, key: str) -> bool:
     return get_str(config, section, key) is not None
 
 
+def copy_item(
+    input_item: Path, destination: Path, output_dir: Path, verbose: bool, depth: int = 0
+) -> None:
+    """
+    Copy either a file or a folder from source to destination
+    """
+    original_input_item = input_item
+    input_item = Path(input_item.resolve())
+    destination = Path(destination.resolve())
+
+    if verbose:
+        logger.debug(f"Evaluating copy: {input_item} -> {destination}")
+
+    if not input_item.exists():
+        return
+
+    if str(input_item).startswith(str(output_dir)):
+        logger.warning(
+            (" " * depth) + f"copy_item: Not copying '{input_item}': Origin is inside output"
+        )
+        return
+
+    if original_input_item.is_symlink():
+        logger.warning(
+            (" " * depth) + f"copy_item: Not copying '{input_item}' because it's a symlink"
+        )
+        return
+
+    if input_item.is_file():
+        destination.parent.mkdir(exist_ok=True, parents=True)
+        if destination.exists():
+            if input_item.stat().st_mtime < destination.stat().st_mtime:
+                if verbose:
+                    logger.debug(
+                        (" " * depth) + f"copy_item: Not copying '{input_item}': Didn't change"
+                    )
+                return
+        logger.info((" " * depth) + f"copy_item: Copying '{input_item}' to '{destination}'")
+        try:
+            copyfile(input_item, destination)
+        except SameFileError:
+            pass
+
+    elif input_item.is_dir():
+        destination.mkdir(exist_ok=True, parents=True)
+        for item in input_item.iterdir():
+            copy_item(
+                input_item / item.name,
+                destination / item.name,
+                output_dir,
+                verbose,
+                depth=depth + 1,
+            )
+
+
 # Main function to handle the backup process
 def main() -> None:
     global GIT_BIN
@@ -213,53 +268,6 @@ def main() -> None:
         path_str = str(path)
         return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
 
-    # Function to copy either a file or a folder from source to destination
-    def copy_item(input_item: Path, destination: Path, depth: int = 0) -> None:
-        """
-        Copy either a file or a folder from source to destination
-        """
-        original_input_item = input_item
-        input_item = Path(input_item.resolve())
-        destination = Path(destination.resolve())
-
-        if args.verbose:
-            logger.debug(f"Evaluating copy: {input_item} -> {destination}")
-
-        if not input_item.exists():
-            return
-
-        if str(input_item).startswith(str(args.output)):
-            logger.warning(
-                (" " * depth) + f"copy_item: Not copying '{input_item}': Origin is inside output"
-            )
-            return
-
-        if original_input_item.is_symlink():
-            logger.warning(
-                (" " * depth) + f"copy_item: Not copying '{input_item}' because it's a symlink"
-            )
-            return
-
-        if input_item.is_file():
-            destination.parent.mkdir(exist_ok=True, parents=True)
-            if destination.exists():
-                if input_item.stat().st_mtime < destination.stat().st_mtime:
-                    if args.verbose:
-                        logger.debug(
-                            (" " * depth) + f"copy_item: Not copying '{input_item}': Didn't change"
-                        )
-                    return
-            logger.info((" " * depth) + f"copy_item: Copying '{input_item}' to '{destination}'")
-            try:
-                copyfile(input_item, destination)
-            except SameFileError:
-                pass
-
-        elif input_item.is_dir():
-            destination.mkdir(exist_ok=True, parents=True)
-            for item in input_item.iterdir():
-                copy_item(input_item / item.name, destination / item.name, depth=depth + 1)
-
     # Function to ingest a path for an app and rulename
     def ingest_path(
         app: str,
@@ -330,7 +338,7 @@ def main() -> None:
 
             elif ppath.exists():
                 logger.info(f"ingest '{path}' '{str(output_dir)}'")
-                copy_item(ppath, output_dir)
+                copy_item(ppath, output_dir, args.output, args.verbose)
 
                 if args.git and git_is_repo_dirty():
                     commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
