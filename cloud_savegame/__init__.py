@@ -111,6 +111,14 @@ def get_bool(config: ConfigParser, section: str, key: str) -> bool:
     return get_str(config, section, key) is not None
 
 
+def is_path_ignored(path: Path, ignored_paths: Set[Path]) -> bool:
+    """
+    Is the path in the list of ignored paths?
+    """
+    path_str = str(path)
+    return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
+
+
 def copy_item(
     input_item: Path, destination: Path, output_dir: Path, verbose: bool, depth: int = 0
 ) -> None:
@@ -260,14 +268,6 @@ def main() -> None:
             git("add", "-A")
             git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
-    # Function to check if a path is in the list of ignored paths
-    def is_path_ignored(path) -> bool:
-        """
-        Is the path in the list of ignored paths?
-        """
-        path_str = str(path)
-        return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
-
     # Function to ingest a path for an app and rulename
     def ingest_path(
         app: str,
@@ -305,7 +305,7 @@ def main() -> None:
                 )
                 return
 
-            if is_path_ignored(path):
+            if is_path_ignored(path, ignored_paths):
                 return
 
             path = str(path)
@@ -438,7 +438,7 @@ def main() -> None:
                 warning_news(f"Game install dir for {game} doesn't exist: {game_install_dir}")
                 continue
 
-            if is_path_ignored(game_install_dir):
+            if is_path_ignored(game_install_dir, ignored_paths):
                 continue
 
             for rule_name, rule_path in parse_rules(game):
@@ -462,7 +462,7 @@ def main() -> None:
             max_depth <= 0
             or start_dir.is_symlink()
             or not start_dir.is_dir()
-            or is_path_ignored(start_dir)
+            or is_path_ignored(start_dir, ignored_paths)
             or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
         ):
             return
@@ -487,7 +487,7 @@ def main() -> None:
         extra_homes = get_paths(config, "search", "extra_homes")
         if extra_homes:
             for home in extra_homes:
-                if is_path_ignored(home):
+                if is_path_ignored(home, ignored_paths):
                     continue
 
                 if not home.exists():
@@ -501,7 +501,7 @@ def main() -> None:
     ALL_HOMES = []
     try:
         for homedir in get_homes():
-            if is_path_ignored(homedir):
+            if is_path_ignored(homedir, ignored_paths):
                 continue
 
             ALL_HOMES.append(homedir)
