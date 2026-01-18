@@ -287,7 +287,8 @@ def main() -> None:
             if base_path:
                 try:
                     resolved_path = Path(path).resolve()
-                    if not str(resolved_path).startswith(str(base_path.resolve())):
+                    resolved_base = base_path.resolve()
+                    if not resolved_path.is_relative_to(resolved_base):
                         warning_news(
                             f"Security: Path '{path}' for app '{app}' resolves outside of its "
                             f"base '{base_path}'. Skipping."
