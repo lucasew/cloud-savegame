@@ -1,12 +1,36 @@
 [tools]
 uv = "0.9.22"
 ruff = "0.14.13"
+dprint = "0.51.1"
 
-[tasks.format]
-run = "ruff format && ruff check --fix"
+[tasks."lint:ruff"]
+run = "ruff check . --fix"
+description = "Lint Python files"
+
+[tasks."fmt:ruff"]
+run = "ruff format ."
+description = "Format Python files"
+
+[tasks."fmt:dprint"]
+run = "dprint fmt"
+description = "Format files with dprint"
+
+[tasks."fmt:nix"]
+run = "nixfmt *.nix || true"
+description = "Format Nix files"
 
 [tasks.lint]
-run = "ruff check"
+depends = ["lint:ruff"]
+description = "Run all linters"
 
-[tasks.check]
-depends = ["format", "lint"]
+[tasks.fmt]
+depends = ["fmt:ruff", "fmt:dprint", "fmt:nix"]
+description = "Run all formatters"
+
+[tasks.test]
+run = "uv run pytest || [ $? -eq 5 ]"
+description = "Run tests"
+
+[tasks.ci]
+depends = ["lint", "test"]
+description = "Run CI checks"
