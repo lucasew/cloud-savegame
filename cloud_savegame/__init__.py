@@ -174,6 +174,35 @@ def copy_item(
             )
 
 
+# Function to search for home directories
+def search_for_homes(
+    start_dir: Path, ignored_paths: Set[Path], max_depth: int
+) -> Iterator[Path]:
+    """
+    Return an iterator of home dirs found starting from one start_dir
+    """
+    if (
+        max_depth <= 0
+        or start_dir.is_symlink()
+        or not start_dir.is_dir()
+        or is_path_ignored(start_dir, ignored_paths)
+        or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
+    ):
+        return
+
+    try:
+        for pattern in HOMEFINDER_FIND_FOLDERS:
+            if (start_dir / pattern).exists():
+                yield start_dir
+                break
+
+        for item in start_dir.iterdir():
+            yield from search_for_homes(item, ignored_paths, max_depth=max_depth - 1)
+
+    except PermissionError:
+        pass
+
+
 # Main function to handle the backup process
 def main() -> None:
     global GIT_BIN
@@ -453,32 +482,6 @@ def main() -> None:
                     game, rule_name, resolved_rule_path, top_level=True, base_path=game_install_dir
                 )
 
-    # Function to search for home directories
-    def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
-        """
-        Return an iterator of home dirs found starting from one start_dir
-        """
-        if (
-            max_depth <= 0
-            or start_dir.is_symlink()
-            or not start_dir.is_dir()
-            or is_path_ignored(start_dir, ignored_paths)
-            or start_dir.name in HOMEFINDER_IGNORE_FOLDERS
-        ):
-            return
-
-        try:
-            for pattern in HOMEFINDER_FIND_FOLDERS:
-                if (start_dir / pattern).exists():
-                    yield start_dir
-                    break
-
-            for item in start_dir.iterdir():
-                yield from search_for_homes(item, max_depth=max_depth - 1)
-
-        except PermissionError:
-            pass
-
     # Function to get all home directories
     def get_homes() -> Iterator[Path]:
         """
@@ -496,7 +499,7 @@ def main() -> None:
                     yield home
 
         for search_path in get_paths(config, "search", "paths"):
-            yield from search_for_homes(search_path)
+            yield from search_for_homes(search_path, ignored_paths, args.max_depth)
 
     ALL_HOMES = []
     try:
