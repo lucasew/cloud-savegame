@@ -16,7 +16,6 @@ dev = [
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-
 [tool.hatch.build.targets.wheel]
 packages = ["cloud_savegame"]
 
@@ -33,10 +32,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-  "F",   # Pyflakes
-  "E",   # pycodestyle errors
-  "W",   # pycodestyle warnings
-  "I",   # isort
+  "F", # Pyflakes
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "I", # isort
 ]
 ignore = []
 
