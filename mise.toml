@@ -1,6 +1,6 @@
 [tools]
 uv = "0.9.22"
-ruff = "0.14.13"
+ruff = "0.14.14"
 dprint = "0.51.1"
 
 [tasks."lint:ruff"]
