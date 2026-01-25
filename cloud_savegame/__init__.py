@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 
+"""
+Cloud Savegame Backup Tool
+
+This module provides functionality to identify, backup, and restore game save files
+and other application states based on customizable rules. It supports:
+
+- **Rule-based discovery**: Finds files using patterns defined in text files.
+- **Git integration**: Automatically commits backups to a git repository.
+- **Backlinking**: Optionally creates symlinks from the original location to the
+  backup repository, allowing games to write directly to the backup.
+- **Cross-platform support**: Designed to work on Linux and potentially other
+  systems using Python's pathlib.
+
+The tool is configured via a configuration file (default: `demo.cfg`) and executed
+via the command line.
+"""
+
 import logging
 import os
 import re
@@ -27,11 +44,16 @@ GIT_BIN = which("git")
 NEWS_LIST = []
 
 
-# Function to run git commands
 def git(*params, always_show=False) -> None:
     """
-    Run git with the parameters if it's enabled
-    Noop if git is disabled
+    Execute a git command with the provided parameters.
+
+    If the `GIT_BIN` constant is None (meaning git was not found or disabled),
+    this function performs no operation.
+
+    Args:
+        *params: Command line arguments to pass to git.
+        always_show: Unused parameter (legacy).
     """
     if GIT_BIN is None:
         return
@@ -39,19 +61,28 @@ def git(*params, always_show=False) -> None:
     subprocess.call([GIT_BIN, *params])
 
 
-# Function to check if the Git repo has uncommitted files
 def git_is_repo_dirty() -> bool:
     """
-    Check if the Git repo has uncommitted files
+    Check if the current git repository has uncommitted changes.
+
+    Returns:
+        bool: True if `git status -s` returns any output (indicating dirtiness), False otherwise.
     """
     status_result = subprocess.run(["git", "status", "-s"], capture_output=True, text=True)
     return bool(status_result.stdout)
 
 
-# Function to move a file or folder to a backup directory to prevent accidental deletion
 def backup_item(item: Path, output_dir: Path) -> None:
     """
-    Move a file or folder to a backup directory to prevent accidental deletion.
+    Safely move a file or directory to a backup location to prevent accidental data loss.
+
+    The item is moved to `output_dir/__backup__`. To prevent filename collisions,
+    a timestamp is appended to the destination filename (e.g., `filename.1234567890`).
+    This is typically used when an existing file needs to be replaced or linked over.
+
+    Args:
+        item: The path of the item to back up.
+        output_dir: The base output directory where the `__backup__` folder will be created.
     """
     backup_dir = output_dir / "__backup__"
     backup_dir.mkdir(exist_ok=True, parents=True)
@@ -67,31 +98,44 @@ def backup_item(item: Path, output_dir: Path) -> None:
     )
 
 
-# Function to add a message to the news list and log it as a warning
 def warning_news(message: str) -> None:
     """
-    Add a message to the news list and log it as a warning
+    Log a warning message and add it to the global `NEWS_LIST`.
+
+    The `NEWS_LIST` is displayed at the end of the execution summary to ensure
+    important warnings are not missed by the user amidst verbose logs.
     """
     NEWS_LIST.append(message)
     logger.warning(message)
 
 
-# Function to get hostname of this machine to report it in the commit
 def get_hostname() -> str:
     """
-    Get hostname of this machine to report it in the commit
+    Retrieve the current machine's hostname.
+
+    This is used to tag commits and identify the source of backups in the git history.
     """
     return socket.gethostname()
 
 
-# Config file helpers
 def get_str(config: ConfigParser, section: str, key: str) -> Optional[str]:
+    """
+    Retrieve a string value from the configuration.
+
+    Returns:
+        The value if the section and key exist, otherwise None.
+    """
     if section not in config or key not in config[section]:
         return None
     return config[section][key]
 
 
 def get_list(config: ConfigParser, section: str, key: str) -> Optional[List[str]]:
+    """
+    Retrieve a list of strings from the configuration.
+
+    The value is split using the delimiter defined in `general.divider` (defaulting to comma).
+    """
     divider = get_str(config, "general", "divider") or ","
     raw = get_str(config, section, key) or ""
     raw = raw.strip()
@@ -101,6 +145,11 @@ def get_list(config: ConfigParser, section: str, key: str) -> Optional[List[str]
 
 
 def get_paths(config: ConfigParser, section: str, key: str) -> Set[Path]:
+    """
+    Retrieve a set of Path objects from the configuration.
+
+    It expands user paths (e.g., `~`) and resolves them to absolute paths.
+    """
     ret = []
     for p in get_list(config, section, key) or []:
         ret.append(Path(os.path.expanduser(p)).resolve())
@@ -108,12 +157,25 @@ def get_paths(config: ConfigParser, section: str, key: str) -> Set[Path]:
 
 
 def get_bool(config: ConfigParser, section: str, key: str) -> bool:
+    """
+    Check if a key exists in the configuration section.
+
+    This treats the presence of the key as True, and absence as False.
+    The actual value of the key is ignored.
+    """
     return get_str(config, section, key) is not None
 
 
 def is_path_ignored(path: Path, ignored_paths: Set[Path]) -> bool:
     """
-    Is the path in the list of ignored paths?
+    Check if a given path should be ignored based on a set of ignored path prefixes.
+
+    Args:
+        path: The path to check.
+        ignored_paths: A set of paths that should be ignored.
+
+    Returns:
+        True if the path starts with any of the ignored paths, False otherwise.
     """
     path_str = str(path)
     return any(path_str.startswith(str(ignored)) for ignored in ignored_paths)
@@ -123,7 +185,21 @@ def copy_item(
     input_item: Path, destination: Path, output_dir: Path, verbose: bool, depth: int = 0
 ) -> None:
     """
-    Copy either a file or a folder from source to destination
+    Recursively copy a file or folder from source to destination.
+
+    This function includes several optimizations and safeguards:
+    - **Incremental Copy**: If the destination file already exists and is newer than
+      the source, the copy is skipped.
+    - **Recursion Prevention**: If the source path is inside the output directory
+      (loop detection), the copy is aborted.
+    - **Symlink Handling**: Symlinks are intentionally ignored and not copied.
+
+    Args:
+        input_item: The source file or directory path.
+        destination: The target path where the item should be copied.
+        output_dir: The root backup directory (used for loop detection).
+        verbose: If True, detailed logs about copy decisions are emitted.
+        depth: Recursion depth (used for indentation in logs).
     """
     original_input_item = input_item
     input_item = Path(input_item.resolve())
@@ -176,6 +252,18 @@ def copy_item(
 
 # Main function to handle the backup process
 def main() -> None:
+    """
+    Main entry point for the cloud-savegame application.
+
+    This function orchestrates the entire backup process:
+    1.  **Configuration**: Parses command-line arguments and loads the config file.
+    2.  **Environment Setup**: Initializes the git repository (if enabled) and prepares
+        output directories.
+    3.  **Discovery**: Scans for user home directories and other relevant paths.
+    4.  **Execution**: Iterates through loaded rules, resolving variables (like `$home`, `$steam`),
+        and invoking `ingest_path` to backup files.
+    5.  **Reporting**: Generates runtime metrics and commits changes to git.
+    """
     global GIT_BIN
     config = ConfigParser()
     config["general"] = {}
@@ -268,7 +356,6 @@ def main() -> None:
             git("add", "-A")
             git("commit", "-m", f"dirty repo state from hostname {hostname}")
 
-    # Function to ingest a path for an app and rulename
     def ingest_path(
         app: str,
         rule_name: str,
@@ -277,9 +364,22 @@ def main() -> None:
         base_path: Optional[Path] = None,
     ) -> None:
         """
-        Ingest a path for an app and rulename
+        Process a single backup rule, copying files from the source path to the backup repo.
 
-        top_level is a strategy to keep track of items for the backlink feature
+        This function handles:
+        - **Security**: Validates paths to prevent traversal attacks and rejects unauthorized
+          absolute paths.
+        - **Glob Expansion**: Recursively expands wildcards (e.g., `*.sav`).
+        - **Backups**: Copies valid files to the output directory using `copy_item`.
+        - **Backlinking**: If enabled, creates symlinks from the source back to the repository.
+
+        Args:
+            app: The name of the application/game (e.g., "Portal 2").
+            rule_name: The specific rule identifier (e.g., "saves").
+            path: The source path pattern (may contain globs).
+            top_level: Flag indicating if this is a direct rule invocation
+                       (used for backlinking logic).
+            base_path: The trusted root path used for security validation of resolved paths.
         """
         try:
             # Security: If a base_path is provided, resolve the input path and ensure
@@ -375,10 +475,13 @@ def main() -> None:
     all_vars = set()
     rulefiles = {}
 
-    # Function to parse rules from one app
     def parse_rules(app: str) -> Iterator[Tuple[str, str]]:
         """
-        Parse rules from one app
+        Read and parse the rule file for a specific application.
+
+        Yields:
+            Tuple[str, str]: A pair of (rule_name, rule_path) for each valid line.
+                             Disabled rules (via config) are skipped.
         """
         rulefile = rulefiles[app]
         logger.debug(f"loading rule '{rulefile}'")
@@ -453,10 +556,16 @@ def main() -> None:
                     game, rule_name, resolved_rule_path, top_level=True, base_path=game_install_dir
                 )
 
-    # Function to search for home directories
     def search_for_homes(start_dir: Path, max_depth: int = args.max_depth) -> Iterator[Path]:
         """
-        Return an iterator of home dirs found starting from one start_dir
+        Recursively search for potential user home directories.
+
+        A directory is considered a "home" if it contains specific marker folders
+        (e.g., `.config`, `AppData`).
+
+        Args:
+            start_dir: The directory to start searching from.
+            max_depth: Maximum recursion depth to prevent indefinite search.
         """
         if (
             max_depth <= 0
@@ -479,10 +588,13 @@ def main() -> None:
         except PermissionError:
             pass
 
-    # Function to get all home directories
     def get_homes() -> Iterator[Path]:
         """
-        Get all homes using data from the config file and search_for_homes
+        Aggregate all potential home directories from configuration and discovery.
+
+        This combines:
+        1. Explicitly configured extra homes (`search.extra_homes`).
+        2. Discovered homes found by searching paths in `search.paths` via `search_for_homes`.
         """
         extra_homes = get_paths(config, "search", "extra_homes")
         if extra_homes:
