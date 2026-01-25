@@ -28,7 +28,7 @@ NEWS_LIST = []
 
 
 # Function to run git commands
-def git(*params, always_show=False) -> None:
+def git(*params, always_show=False, stdin_input: Optional[str] = None) -> None:
     """
     Run git with the parameters if it's enabled
     Noop if git is disabled
@@ -36,7 +36,12 @@ def git(*params, always_show=False) -> None:
     if GIT_BIN is None:
         return
     logger.info("git: %s", " ".join(f"'{p}'" for p in params))
-    subprocess.call([GIT_BIN, *params])
+    subprocess.run(
+        [GIT_BIN, *params],
+        input=stdin_input,
+        text=True,
+        check=False,  # Don't raise on non-zero exit codes, mimic subprocess.call
+    )
 
 
 # Function to check if the Git repo has uncommitted files
@@ -266,7 +271,11 @@ def main() -> None:
             git("stash", "push")
             git("stash", "pop")
             git("add", "-A")
-            git("commit", "-m", f"dirty repo state from hostname {hostname}")
+            git(
+                "commit",
+                "--file=-",
+                stdin_input=f"dirty repo state from hostname {hostname}",
+            )
 
     # Function to ingest a path for an app and rulename
     def ingest_path(
@@ -341,9 +350,9 @@ def main() -> None:
                 copy_item(ppath, output_dir, args.output, args.verbose)
 
                 if args.git and git_is_repo_dirty():
-                    commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
+                    commit_message = f"hostname={hostname} app={app} rule={rule_name} path={path}"
                     git("add", "-A")
-                    git("commit", "-m", commit)
+                    git("commit", "--file=-", stdin_input=commit_message)
 
             # backlink logic
             if args.backlink and top_level:
@@ -634,7 +643,7 @@ def main() -> None:
 
         if args.git:
             git("add", "-A")
-            git("commit", "-m", f"run report for {hostname}")
+            git("commit", "--file=-", stdin_input=f"run report for {hostname}")
             git("pull", "--rebase")
             git("push", always_show=True)
 
