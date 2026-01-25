@@ -18,3 +18,10 @@
 **Root Cause:** Tooling was configured ad-hoc or missing.
 **Solution:** I installed `go-task` and `dprint`, configured `Taskfile.yml` with `lint` and `fmt` tasks (including wildcard subtask execution), and set up `dprint.json`. I also updated `mise.toml` to include these tools.
 **Pattern:** Centralizing development tasks in a `Taskfile.yml` and using `mise` for tool management ensures a consistent developer experience and simpler CI integration.
+
+## 2026-01-25 - Extract `parse_rules` function to module scope
+
+**Issue:** The `parse_rules` function was nested inside the `main` function in `cloud_savegame/__init__.py`. This added unnecessary complexity to the `main` function and made `parse_rules` harder to test in isolation.
+**Root Cause:** It was implemented as a closure to access `rulefiles` and `config` variables from the local scope.
+**Solution:** I extracted `parse_rules` to the module scope. I updated its signature to explicitly accept `app`, `rulefiles`, and `config` as arguments. I also added a unit test to verify its behavior.
+**Pattern:** Extracting nested helper functions from the `main` god-function improves modularity and allows for unit testing. Explicitly passing dependencies makes the data flow clearer.

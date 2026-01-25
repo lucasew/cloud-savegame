@@ -12,7 +12,7 @@ from pathlib import Path
 from pprint import pformat
 from shutil import SameFileError, copyfile, which
 from time import time
-from typing import Iterator, List, Optional, Set, Tuple
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -172,6 +172,25 @@ def copy_item(
                 verbose,
                 depth=depth + 1,
             )
+
+
+# Function to parse rules from one app
+def parse_rules(
+    app: str, rulefiles: Dict[str, Path], config: ConfigParser
+) -> Iterator[Tuple[str, str]]:
+    """
+    Parse rules from one app
+    """
+    rulefile = rulefiles[app]
+    logger.debug(f"loading rule '{rulefile}'")
+    for line in Path(rulefile).read_text().split("\n"):
+        rule = line.strip()
+        if rule:
+            parts = rule.split(" ", 1)  # Split only on first space
+            if len(parts) == 2:
+                rule_name, rule_path = parts
+                if not get_bool(config, app, f"ignore_{rule_name}"):
+                    yield rule_name.strip(), rule_path.strip()
 
 
 # Main function to handle the backup process
@@ -375,22 +394,6 @@ def main() -> None:
     all_vars = set()
     rulefiles = {}
 
-    # Function to parse rules from one app
-    def parse_rules(app: str) -> Iterator[Tuple[str, str]]:
-        """
-        Parse rules from one app
-        """
-        rulefile = rulefiles[app]
-        logger.debug(f"loading rule '{rulefile}'")
-        for line in Path(rulefile).read_text().split("\n"):
-            rule = line.strip()
-            if rule:
-                parts = rule.split(" ", 1)  # Split only on first space
-                if len(parts) == 2:
-                    rule_name, rule_path = parts
-                    if not get_bool(config, app, f"ignore_{rule_name}"):
-                        yield rule_name.strip(), rule_path.strip()
-
     # Load rules
     rules_amount = 0
 
@@ -403,7 +406,7 @@ def main() -> None:
             apps.add(appname)
             rulefiles[appname] = rulefile
 
-            for rule_name, rule_path in parse_rules(appname):
+            for rule_name, rule_path in parse_rules(appname, rulefiles, config):
                 match = re.search(r"\$([a-z]*)", rule_path)
                 variables = list(match.groups()) if match else []
 
@@ -441,7 +444,7 @@ def main() -> None:
             if is_path_ignored(game_install_dir, ignored_paths):
                 continue
 
-            for rule_name, rule_path in parse_rules(game):
+            for rule_name, rule_path in parse_rules(game, rulefiles, config):
                 resolved_rule_path = rule_path.replace(
                     "$installdir", str(game_install_dir.resolve())
                 )
@@ -509,7 +512,7 @@ def main() -> None:
 
             # Process home variable
             for game in var_users.get("home") or []:
-                for rule_name, rule_path in parse_rules(game):
+                for rule_name, rule_path in parse_rules(game, rulefiles, config):
                     resolved_rule_path = rule_path.replace("$home", str(homedir))
                     if rule_path != resolved_rule_path:
                         ingest_path(
@@ -519,7 +522,7 @@ def main() -> None:
             # Process appdata variable
             for game in var_users["appdata"]:
                 appdata = homedir / "AppData"
-                for rule_name, rule_path in parse_rules(game):
+                for rule_name, rule_path in parse_rules(game, rulefiles, config):
                     resolved_rule_path = rule_path.replace("$appdata", str(appdata))
                     if rule_path != resolved_rule_path:
                         ingest_path(
@@ -538,7 +541,7 @@ def main() -> None:
 
                     # Process program_files variable
                     for game in var_users["program_files"]:
-                        for rule_name, rule_path in parse_rules(game):
+                        for rule_name, rule_path in parse_rules(game, rulefiles, config):
                             resolved_rule_path = rule_path.replace(
                                 "$program_files", str(program_files)
                             )
@@ -578,7 +581,7 @@ def main() -> None:
                     for ubisoft_user in ubisoft_users:
                         ubisoft_var = ubisoft_savegame_dir / ubisoft_user
                         for game in var_users["ubisoft"]:
-                            for rule_name, rule_path in parse_rules(game):
+                            for rule_name, rule_path in parse_rules(game, rulefiles, config):
                                 resolved_rule_path = rule_path.replace("$ubisoft", str(ubisoft_var))
                                 if rule_path != resolved_rule_path:
                                     logger.debug(f"UBISOFT {resolved_rule_path} {ubisoft_users}")
@@ -608,7 +611,7 @@ def main() -> None:
                     continue
 
                 for game in var_users["documents"]:
-                    for rule_name, rule_path in parse_rules(game):
+                    for rule_name, rule_path in parse_rules(game, rulefiles, config):
                         resolved_rule_path = rule_path.replace("$documents", str(documents))
                         if rule_path != resolved_rule_path:
                             ingest_path(
