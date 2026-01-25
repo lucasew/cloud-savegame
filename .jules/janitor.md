@@ -18,3 +18,10 @@
 **Root Cause:** Tooling was configured ad-hoc or missing.
 **Solution:** I installed `go-task` and `dprint`, configured `Taskfile.yml` with `lint` and `fmt` tasks (including wildcard subtask execution), and set up `dprint.json`. I also updated `mise.toml` to include these tools.
 **Pattern:** Centralizing development tasks in a `Taskfile.yml` and using `mise` for tool management ensures a consistent developer experience and simpler CI integration.
+
+## 2026-01-18 - Extract `search_for_homes` to module scope
+
+**Issue:** The `search_for_homes` function was nested inside `main`, contributing to the "god function" problem and mixing recursion logic with main execution flow.
+**Root Cause:** It was originally written as a closure to access `ignored_paths` and `args.max_depth` easily.
+**Solution:** Extracted `search_for_homes` to module scope. Updated signature to accept `ignored_paths` and `max_depth` explicitly. Updated call sites to pass these arguments.
+**Pattern:** Explicit dependency injection is preferred over closures for complex recursive functions to improve testability and readability.
