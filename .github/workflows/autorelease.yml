@@ -41,8 +41,10 @@ jobs:
         git config user.name actions-bot
         git config user.email actions-bot@users.noreply.github.com
 
-    - name: Check and format
-      run: mise run check
+    - name: Codegen
+      run: mise run codegen
+    - name: Format
+      run: mise run fmt
 
     - name: Create Pull Request if there is new stuff from updaters
       if: github.event_name != 'pull_request'
@@ -76,6 +78,9 @@ jobs:
           echo "New version: $(cat ./cloud_savegame/VERSION)" >> $GITHUB_STEP_SUMMARY
           echo "RELEASE_VERSION=$(cat ./cloud_savegame/VERSION)" >> $GITHUB_ENV
         fi
+
+    - name: CI
+      run: mise run ci
 
     - name: Build wheel
       run: uv build
