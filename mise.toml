@@ -3,6 +3,14 @@ uv = "0.9.22"
 ruff = "0.14.13"
 dprint = "0.51.1"
 
+[tasks.install]
+run = "uv sync"
+description = "Install dependencies"
+
+[tasks.codegen]
+run = "echo 'No codegen'"
+description = "Generate code (no-op)"
+
 [tasks."lint:ruff"]
 run = "ruff check . --fix"
 description = "Lint Python files"
@@ -10,6 +18,10 @@ description = "Lint Python files"
 [tasks."fmt:ruff"]
 run = "ruff format ."
 description = "Format Python files"
+
+[tasks."lint:dprint"]
+run = "dprint check"
+description = "Check formatting with dprint"
 
 [tasks."fmt:dprint"]
 run = "dprint fmt"
@@ -20,7 +32,7 @@ run = "nixfmt *.nix || true"
 description = "Format Nix files"
 
 [tasks.lint]
-depends = ["lint:ruff"]
+depends = ["lint:ruff", "lint:dprint"]
 description = "Run all linters"
 
 [tasks.fmt]

@@ -18,3 +18,10 @@
 **Root Cause:** Tooling was configured ad-hoc or missing.
 **Solution:** I installed `go-task` and `dprint`, configured `Taskfile.yml` with `lint` and `fmt` tasks (including wildcard subtask execution), and set up `dprint.json`. I also updated `mise.toml` to include these tools.
 **Pattern:** Centralizing development tasks in a `Taskfile.yml` and using `mise` for tool management ensures a consistent developer experience and simpler CI integration.
+
+## 2025-05-24 - Configure standard mise tasks
+
+**Issue:** The project lacked the full set of standard `mise` tasks (`install`, `codegen`, `lint`, `test`, `ci`) required for a robust and standardized CI workflow. Specifically, `install` and `codegen` were missing, and `lint` needed to include `dprint`.
+**Root Cause:** Incomplete configuration of `mise.toml`.
+**Solution:** I updated `mise.toml` to define `install` (using `uv sync`), `codegen` (placeholder), and refined `lint` and `ci` tasks to ensure proper dependency chains and coverage of all linters (Ruff, dprint).
+**Pattern:** Standardizing `mise` tasks ensures that any developer or agent can run `mise run ci` and expect a full verification suite, reducing onboarding time and CI configuration complexity.
