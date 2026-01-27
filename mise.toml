@@ -12,7 +12,7 @@ run = "echo \"No codegen needed\""
 description = "Update generated code"
 
 [tasks."lint:ruff"]
-run = "ruff check . --fix"
+run = "ruff check ."
 description = "Lint Python files"
 
 [tasks."lint:dprint"]
