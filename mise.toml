@@ -4,7 +4,7 @@ ruff = "0.14.13"
 dprint = "0.51.1"
 
 [tasks.install]
-run = "uv sync"
+run = "uv sync --extra dev"
 description = "Install dependencies"
 
 [tasks.codegen]
