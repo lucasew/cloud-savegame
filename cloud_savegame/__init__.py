@@ -405,7 +405,7 @@ def main() -> None:
                 )
                 return
 
-            if is_path_ignored(path, ignored_paths):
+            if is_path_ignored(Path(path), ignored_paths):
                 return
 
             path = str(path)
@@ -473,7 +473,7 @@ def main() -> None:
     required_vars = defaultdict(set)
     var_users = defaultdict(set)
     all_vars = set()
-    rulefiles = {}
+    rulefiles: dict[str, Path] = {}
 
     def parse_rules(app: str) -> Iterator[Tuple[str, str]]:
         """
