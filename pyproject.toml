@@ -10,6 +10,7 @@ dev = [
   "ruff",
   "pytest",
   "pytest-cov",
+  "mypy",
 ]
 
 [build-system]
@@ -42,3 +43,7 @@ ignore = []
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.mypy]
+check_untyped_defs = true
+ignore_missing_imports = true

@@ -4,7 +4,7 @@ ruff = "0.14.13"
 dprint = "0.51.1"
 
 [tasks.install]
-run = "uv sync"
+run = "uv sync --extra dev"
 description = "Install dependencies"
 
 [tasks.codegen]
@@ -18,6 +18,10 @@ description = "Lint Python files"
 [tasks."lint:dprint"]
 run = "dprint check"
 description = "Lint files with dprint"
+
+[tasks."lint:mypy"]
+run = "uv run mypy ."
+description = "Type check with mypy"
 
 [tasks."fmt:ruff"]
 run = "ruff format ."
