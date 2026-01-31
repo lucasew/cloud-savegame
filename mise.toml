@@ -1,31 +1,32 @@
 [tools]
-uv = "0.9.22"
-ruff = "0.14.14"
 dprint = "0.51.1"
+go = "1.25.6"
+golangci-lint = "2.8.0"
+"go:github.com/spf13/cobra-cli" = "1.3.0"
 
 [tasks.install]
-run = "uv sync --extra dev"
+run = "go mod download"
 description = "Install dependencies"
 
 [tasks.codegen]
 run = "echo \"No codegen needed\""
 description = "Update generated code"
 
-[tasks."lint:ruff"]
-run = "ruff check ."
-description = "Lint Python files"
+[tasks.build]
+run = "go build -o cloud-savegame ./cmd/cloud-savegame"
+description = "Build binary"
+
+[tasks."lint:go"]
+run = "golangci-lint run"
+description = "Lint Go files"
 
 [tasks."lint:dprint"]
 run = "dprint check"
 description = "Lint files with dprint"
 
-[tasks."lint:mypy"]
-run = "uv run mypy ."
-description = "Type check with mypy"
-
-[tasks."fmt:ruff"]
-run = "ruff format ."
-description = "Format Python files"
+[tasks."fmt:go"]
+run = "go fmt ./..."
+description = "Format Go files"
 
 [tasks."fmt:dprint"]
 run = "dprint fmt"
@@ -44,9 +45,9 @@ depends = ["fmt:*"]
 description = "Run all formatters"
 
 [tasks.test]
-run = "uv run pytest || [ $? -eq 5 ]"
+run = "go test ./..."
 description = "Run tests"
 
 [tasks.ci]
-depends = ["lint", "test"]
+depends = ["lint", "test", "build"]
 description = "Run CI checks"

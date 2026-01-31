@@ -79,12 +79,12 @@ jobs:
       run: |
         if [[ ! -z "$NEW_VERSION" ]]; then
           NO_TAG=1 ./make_release "$NEW_VERSION"
-          echo "New version: $(cat ./cloud_savegame/VERSION)" >> $GITHUB_STEP_SUMMARY
-          echo "RELEASE_VERSION=$(cat ./cloud_savegame/VERSION)" >> $GITHUB_ENV
+          echo "New version: $(cat ./VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "RELEASE_VERSION=$(cat ./VERSION)" >> $GITHUB_ENV
         fi
 
-    - name: Build wheel
-      run: uv build
+    - name: Build binary
+      run: mise run build
 
     - name: Create release
       if: github.event_name != 'pull_request' && env.RELEASE_VERSION != ''
@@ -94,14 +94,7 @@ jobs:
         TITLE: Release ${{ env.RELEASE_VERSION }}
       run: |
         gh release create "$TAG" \
+          cloud-savegame \
           --title "$TITLE" \
           --generate-notes \
           --notes-start-tag $(gh release list --limit 1 --json tagName -q .[].tagName)
-
-    - name: Build and publish to PyPI
-      if: github.event_name != 'pull_request' && env.RELEASE_VERSION != ''
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        uvx twine upload dist/*
