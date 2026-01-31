@@ -2,9 +2,8 @@ package rules
 
 import (
 	"bufio"
+	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/lucasew/cloud-savegame/internal/config"
@@ -15,46 +14,62 @@ type Rule struct {
 	Path string
 }
 
-type Loader struct {
-	Cfg      *config.Config
-	RuleDirs []string
+type RuleFile struct {
+	FS   fs.FS
+	Path string
 }
 
-func NewLoader(cfg *config.Config, ruleDirs []string) *Loader {
+type Loader struct {
+	Cfg     *config.Config
+	Sources []fs.FS
+}
+
+func NewLoader(cfg *config.Config, sources []fs.FS) *Loader {
 	return &Loader{
-		Cfg:      cfg,
-		RuleDirs: ruleDirs,
+		Cfg:     cfg,
+		Sources: sources,
 	}
 }
 
-// GetApps returns a list of apps found in the rule directories.
-// It also returns a map of app -> rule file path.
-func (l *Loader) GetApps() (map[string]string, error) {
-	apps := make(map[string]string)
-	for _, dir := range l.RuleDirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
-				appName := strings.TrimSuffix(entry.Name(), ".txt")
-				apps[appName] = filepath.Join(dir, entry.Name())
+// GetApps returns a list of apps found in the rule FSs.
+func (l *Loader) GetApps() (map[string]RuleFile, error) {
+	apps := make(map[string]RuleFile)
+
+	for _, fsys := range l.Sources {
+		// Start walk from root of each FS
+		// If embedded "rules", the files are in "rules/xxx.txt"?
+		// If using `//go:embed rules`, the FS has "rules" directory at root.
+		// If using `os.DirFS(".../output/__rules__")`, files are at root.
+		// We need to handle both cases or normalize.
+		// If we use `fs.Sub(fsys, "rules")` for embedded?
+
+		err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
 			}
+			if !d.IsDir() && strings.HasSuffix(d.Name(), ".txt") {
+				appName := strings.TrimSuffix(d.Name(), ".txt")
+				apps[appName] = RuleFile{FS: fsys, Path: path}
+			}
+			return nil
+		})
+		if err != nil {
+			slog.Error("failed to walk rules fs", "error", err)
+			// Continue to next source?
 		}
 	}
 	return apps, nil
 }
 
 // ParseRules yields rules for a specific app.
-func (l *Loader) ParseRules(appName, ruleFile string) ([]Rule, error) {
-	f, err := os.Open(ruleFile)
+func (l *Loader) ParseRules(appName string, rf RuleFile) ([]Rule, error) {
+	f, err := rf.FS.Open(rf.Path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			slog.Error("failed to close rule file", "file", ruleFile, "error", err)
+			slog.Error("failed to close rule file", "file", rf.Path, "error", err)
 		}
 	}()
 
@@ -70,8 +85,6 @@ func (l *Loader) ParseRules(appName, ruleFile string) ([]Rule, error) {
 			ruleName := strings.TrimSpace(parts[0])
 			rulePath := strings.TrimSpace(parts[1])
 
-			// Check config for ignore
-			// Python: get_bool(config, app, f"ignore_{rule_name}")
 			if l.Cfg.GetBool(appName, "ignore_"+ruleName) {
 				continue
 			}

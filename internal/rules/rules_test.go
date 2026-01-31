@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucasew/cloud-savegame/internal/config"
 	"github.com/lucasew/cloud-savegame/internal/rules"
+    "io/fs"
 )
 
 func TestParseRules(t *testing.T) {
@@ -28,7 +29,6 @@ func TestParseRules(t *testing.T) {
 	}
 
 	// Mock Config
-	// Since Config uses ini.v1 file, I need to create a dummy config file
 	configFile := filepath.Join(tmpDir, "config.ini")
 	configContent := "[game]\nignore_ignore_me=1" // Ignore the rule named "ignore_me"
 	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
@@ -40,14 +40,14 @@ func TestParseRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loader := rules.NewLoader(cfg, []string{tmpDir})
+	loader := rules.NewLoader(cfg, []fs.FS{os.DirFS(tmpDir)})
 
 	// Test GetApps
 	apps, err := loader.GetApps()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if apps["game"] == "" {
+	if _, ok := apps["game"]; !ok {
 		t.Error("Expected app 'game' to be found")
 	}
 

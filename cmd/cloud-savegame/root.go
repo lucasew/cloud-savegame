@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	rootpkg "github.com/lucasew/cloud-savegame"
 	"github.com/lucasew/cloud-savegame/internal/backup"
 	"github.com/lucasew/cloud-savegame/internal/config"
 	"github.com/lucasew/cloud-savegame/internal/git"
@@ -113,16 +115,17 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	// Setup Engine
-	exe, _ := os.Executable()
-	ruleDirs := []string{
-		filepath.Join(filepath.Dir(exe), "rules"),
-		filepath.Join(outPath, "__rules__"),
-	}
-	if err := os.MkdirAll(ruleDirs[1], 0755); err != nil {
-		slog.Error("Failed to mkdir rules", "error", err)
+	embeddedRules, _ := fs.Sub(rootpkg.RulesFS, "rules")
+	ruleSources := []fs.FS{embeddedRules}
+
+	customRulesDir := filepath.Join(outPath, "__rules__")
+	if err := os.MkdirAll(customRulesDir, 0755); err == nil {
+		ruleSources = append(ruleSources, os.DirFS(customRulesDir))
+	} else {
+		slog.Error("Failed to mkdir custom rules", "error", err)
 	}
 
-	rl := rules.NewLoader(cfg, ruleDirs)
+	rl := rules.NewLoader(cfg, ruleSources)
 	eng := backup.NewEngine(cfg, g, rl, outPath)
 	eng.Backlink = backlink
 	eng.Verbose = verbose
@@ -134,8 +137,8 @@ func run(cmd *cobra.Command, args []string) {
 	allApps, _ := rl.GetApps()
 
 	// Parse all rules to find variable usage
-	for app, ruleFile := range allApps {
-		r, err := rl.ParseRules(app, ruleFile)
+	for app, rf := range allApps {
+		r, err := rl.ParseRules(app, rf)
 		if err != nil {
 			continue
 		}
