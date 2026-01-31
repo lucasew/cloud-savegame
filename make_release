@@ -11,7 +11,7 @@ else
 	exit 1
 fi
 
-CURRENT_VERSION=($(cat ./cloud_savegame/VERSION | sed 's;\.; ;g'))
+CURRENT_VERSION=($(cat ./VERSION | sed 's;\.; ;g'))
 
 case "$VERSION" in
 	patch)
@@ -27,7 +27,7 @@ esac
 
 # echo new version: $VERSION
 # exit 0
-printf "%s" "$VERSION" > ./cloud_savegame/VERSION
+printf "%s" "$VERSION" > ./VERSION
 
 git add -A
 git commit -sm "bump to $VERSION"
