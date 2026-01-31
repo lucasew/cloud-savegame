@@ -13,7 +13,7 @@ run = "echo \"No codegen needed\""
 description = "Update generated code"
 
 [tasks.build]
-run = "go build -o cloud-savegame ./cmd/cloud-savegame"
+run = "go build -mod=vendor -o cloud_savegame ./cmd/cloud-savegame"
 description = "Build binary"
 
 [tasks."lint:go"]

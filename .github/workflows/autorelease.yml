@@ -94,7 +94,7 @@ jobs:
         TITLE: Release ${{ env.RELEASE_VERSION }}
       run: |
         gh release create "$TAG" \
-          cloud-savegame \
+          cloud_savegame \
           --title "$TITLE" \
           --generate-notes \
           --notes-start-tag $(gh release list --limit 1 --json tagName -q .[].tagName)
