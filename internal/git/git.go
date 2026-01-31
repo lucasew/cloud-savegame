@@ -77,15 +77,15 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 }
 
 func (g *Wrapper) Commit(ctx context.Context, message string) error {
-    if !g.Available() {
-        return nil
-    }
-    // Secure commit using --file=- to read message from stdin
-    cmd := exec.CommandContext(ctx, g.gitBin, "commit", "--file=-")
-    cmd.Dir = g.dir
-    cmd.Stdin = strings.NewReader(message)
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    slog.Info("git", "args", []string{"commit", "-m", "..."}) // Log without message to avoid clutter/secrets? or log message.
-    return cmd.Run()
+	if !g.Available() {
+		return nil
+	}
+	// Secure commit using --file=- to read message from stdin
+	cmd := exec.CommandContext(ctx, g.gitBin, "commit", "--file=-")
+	cmd.Dir = g.dir
+	cmd.Stdin = strings.NewReader(message)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	slog.Info("git", "args", []string{"commit", "-m", "..."}) // Log without message to avoid clutter/secrets? or log message.
+	return cmd.Run()
 }
