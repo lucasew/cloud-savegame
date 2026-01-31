@@ -46,7 +46,7 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", defaultCfg, "Configuration file")
 	rootCmd.Flags().StringVarP(&outputDir, "output", "o", "", "Which folder to copy backed up files")
-	rootCmd.MarkFlagRequired("output")
+	_ = rootCmd.MarkFlagRequired("output")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Give more detail")
 	rootCmd.Flags().BoolVarP(&useGit, "git", "g", false, "Use git for snapshot")
 	rootCmd.Flags().BoolVarP(&backlink, "backlink", "b", false, "Create symlinks at the origin")
@@ -85,11 +85,6 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Change cwd to output dir (Python behavior)
-	// But careful, config loading might depend on original CWD if relative path
-	// Python: config.read(args.config) BEFORE chdir.
-	// Python: os.chdir(str(args.output)) happens after config load, before git init.
-
 	cfg := config.New()
 	slog.Debug("loading configuration file", "path", cfgFile)
 	if err := cfg.Load(cfgFile); err != nil {
@@ -102,16 +97,18 @@ func run(cmd *cobra.Command, args []string) {
 	if useGit {
 		g = git.New(outPath) // Git operations in output dir
 		if _, err := os.Stat(filepath.Join(outPath, ".git")); os.IsNotExist(err) {
-			g.Init(cmd.Context(), "master")
+			if err := g.Init(cmd.Context(), "master"); err != nil {
+				slog.Error("git init failed", "error", err)
+			}
 		}
 		dirty, _ := g.IsRepoDirty(cmd.Context())
 		if dirty {
 			host, _ := os.Hostname()
-			g.Exec(cmd.Context(), "add", "-A")
-			g.Exec(cmd.Context(), "stash", "push")
-			g.Exec(cmd.Context(), "stash", "pop")
-			g.Exec(cmd.Context(), "add", "-A")
-			g.Commit(cmd.Context(), fmt.Sprintf("dirty repo state from hostname %s", host))
+			_ = g.Exec(cmd.Context(), "add", "-A")
+			_ = g.Exec(cmd.Context(), "stash", "push")
+			_ = g.Exec(cmd.Context(), "stash", "pop")
+			_ = g.Exec(cmd.Context(), "add", "-A")
+			_ = g.Commit(cmd.Context(), fmt.Sprintf("dirty repo state from hostname %s", host))
 		}
 	}
 
@@ -121,7 +118,9 @@ func run(cmd *cobra.Command, args []string) {
 		filepath.Join(filepath.Dir(exe), "rules"),
 		filepath.Join(outPath, "__rules__"),
 	}
-	os.MkdirAll(ruleDirs[1], 0755)
+	if err := os.MkdirAll(ruleDirs[1], 0755); err != nil {
+		slog.Error("Failed to mkdir rules", "error", err)
+	}
 
 	rl := rules.NewLoader(cfg, ruleDirs)
 	eng := backup.NewEngine(cfg, g, rl, outPath)
@@ -148,8 +147,6 @@ func run(cmd *cobra.Command, args []string) {
 					varUsers[v] = append(varUsers[v], app)
 				}
 			}
-			// If no vars, ingest immediately?
-			// Python: if not variables: ingest_path(...) continue
 			if len(matches) == 0 {
 				eng.IngestPath(app, rule.Name, rule.Path, false, "")
 			}
@@ -177,8 +174,6 @@ func run(cmd *cobra.Command, args []string) {
 				continue
 			}
 
-			// Re-parse rules for this app
-			// Optimization: cache parsed rules? For now just re-parse.
 			appRules, _ := rl.ParseRules(app, allApps[app])
 			for _, r := range appRules {
 				resolved := strings.ReplaceAll(r.Path, "$installdir", installDir)
@@ -238,24 +233,14 @@ func run(cmd *cobra.Command, args []string) {
 		}
 
 		// $program_files
-		// Check parent.parent for Program Files candidates
-		// home is usually /home/user or /Users/user or C:\Users\user
-		// parent is Users, parent.parent is / or C:\
-		// We want to scan sibling folders of Users? No.
-		// Python: `homedir.parent.parent.iterdir()`
-		// If `homedir` is `.../Lucas`, parent `.../DADOS`, parent `.../Dados`.
-		// It seems it looks for "Common Files" in folders 2 levels up from home.
-
 		parent := filepath.Dir(home)
 		grandparent := filepath.Dir(parent)
 
 		entries, err := os.ReadDir(grandparent)
-		hasProgramFiles := false
 		if err == nil {
 			for _, entry := range entries {
 				pfCandidate := filepath.Join(grandparent, entry.Name())
 				if _, err := os.Stat(filepath.Join(pfCandidate, "Common Files")); err == nil {
-					hasProgramFiles = true
 
 					// Process program_files
 					for _, app := range varUsers["program_files"] {
@@ -281,8 +266,8 @@ func run(cmd *cobra.Command, args []string) {
 
 						// Write users.txt
 						ubiMetaDir := filepath.Join(outPath, "ubisoft")
-						os.MkdirAll(ubiMetaDir, 0755)
-						os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644)
+						_ = os.MkdirAll(ubiMetaDir, 0755)
+						_ = os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644)
 
 						// Process ubisoft
 						for _, uUser := range ubiUserList {
@@ -300,12 +285,6 @@ func run(cmd *cobra.Command, args []string) {
 					}
 				}
 			}
-		}
-
-		if !hasProgramFiles {
-			// e.WarningNews(...)
-			// Only warn if we expect it? Python warns unconditionally if not found in ANY candidate.
-			// But here we iterate candidates.
 		}
 
 		// $documents
@@ -330,22 +309,22 @@ func run(cmd *cobra.Command, args []string) {
 	slog.Info("Finishing up")
 	finishTime := time.Now()
 	metaDir := filepath.Join(outPath, "__meta__", eng.Hostname)
-	os.MkdirAll(metaDir, 0755)
+	_ = os.MkdirAll(metaDir, 0755)
 
-	os.WriteFile(filepath.Join(metaDir, "last_run.txt"), []byte(fmt.Sprintf("%d", finishTime.Unix())), 0644)
+	_ = os.WriteFile(filepath.Join(metaDir, "last_run.txt"), []byte(fmt.Sprintf("%d", finishTime.Unix())), 0644)
 
 	duration := finishTime.Sub(startTime).Seconds()
 	f, _ := os.OpenFile(filepath.Join(metaDir, "run_times.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if f != nil {
-		fmt.Fprintf(f, "%d,%f\n", startTime.Unix(), duration)
-		f.Close()
+		_, _ = fmt.Fprintf(f, "%d,%f\n", startTime.Unix(), duration)
+		_ = f.Close()
 	}
 
 	if useGit && g != nil {
-		g.Exec(cmd.Context(), "add", "-A")
-		g.Commit(cmd.Context(), fmt.Sprintf("run report for %s", eng.Hostname))
-		g.Exec(cmd.Context(), "pull", "--rebase")
-		g.Exec(cmd.Context(), "push")
+		_ = g.Exec(cmd.Context(), "add", "-A")
+		_ = g.Commit(cmd.Context(), fmt.Sprintf("run report for %s", eng.Hostname))
+		_ = g.Exec(cmd.Context(), "pull", "--rebase")
+		_ = g.Exec(cmd.Context(), "push")
 	}
 
 	if len(eng.NewsList) > 0 {

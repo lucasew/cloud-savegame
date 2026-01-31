@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -143,12 +144,20 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() {
+		if err := s.Close(); err != nil {
+			slog.Error("failed to close src", "error", err)
+		}
+	}()
 	d, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			slog.Error("failed to close dst", "error", err)
+		}
+	}()
 	_, err = io.Copy(d, s)
 	return err
 }
@@ -220,11 +229,15 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 
 			// Git commit per file/ingest
 			if e.Git != nil {
-				isDirty, _ := e.Git.IsRepoDirty(nil)
+				isDirty, _ := e.Git.IsRepoDirty(context.TODO())
 				if isDirty {
 					commitMsg := fmt.Sprintf("hostname=%s app=%s rule=%s path=%s", e.Hostname, app, ruleName, pathStr)
-					e.Git.Exec(nil, "add", "-A")
-					e.Git.Commit(nil, commitMsg)
+					if err := e.Git.Exec(context.TODO(), "add", "-A"); err != nil {
+						slog.Error("git add failed", "error", err)
+					}
+					if err := e.Git.Commit(context.TODO(), commitMsg); err != nil {
+						slog.Error("git commit failed", "error", err)
+					}
 				}
 			}
 		}
@@ -233,20 +246,26 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 		if e.Backlink && topLevel {
 			slog.Debug("TOPLEVEL backlink", "app", app, "rule", ruleName, "path", pathStr)
 			parent := filepath.Dir(pathStr)
-			os.MkdirAll(parent, 0755)
+			if err := os.MkdirAll(parent, 0755); err != nil {
+				slog.Error("failed to mkdir parent for backlink", "error", err)
+			}
 
 			info, err := os.Lstat(pathStr)
 			isSymlink := err == nil && (info.Mode()&os.ModeSymlink != 0)
 			exists := err == nil
 
 			if isSymlink {
-				os.Remove(pathStr)
+				if err := os.Remove(pathStr); err != nil {
+					slog.Error("failed to remove symlink", "path", pathStr, "error", err)
+				}
 			} else if exists {
 				e.BackupItem(pathStr, e.OutputDir)
 			}
 
 			slog.Info("ln", "src", pathStr, "target", outputDir)
-			os.Symlink(outputDir, pathStr)
+			if err := os.Symlink(outputDir, pathStr); err != nil {
+				slog.Error("failed to create symlink", "src", outputDir, "dst", pathStr, "error", err)
+			}
 		}
 
 		// Check broken symlink

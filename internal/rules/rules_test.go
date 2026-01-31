@@ -15,7 +15,11 @@ func TestParseRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove tmp dir: %v", err)
+		}
+	}()
 
 	ruleContent := "save /path/to/save\nignore_me /should/not/be/seen"
 	err = os.WriteFile(filepath.Join(tmpDir, "game.txt"), []byte(ruleContent), 0644)
@@ -27,10 +31,14 @@ func TestParseRules(t *testing.T) {
 	// Since Config uses ini.v1 file, I need to create a dummy config file
 	configFile := filepath.Join(tmpDir, "config.ini")
 	configContent := "[game]\nignore_ignore_me=1" // Ignore the rule named "ignore_me"
-	os.WriteFile(configFile, []byte(configContent), 0644)
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := config.New()
-	cfg.Load(configFile)
+	if err := cfg.Load(configFile); err != nil {
+		t.Fatal(err)
+	}
 
 	loader := rules.NewLoader(cfg, []string{tmpDir})
 

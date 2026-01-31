@@ -2,6 +2,7 @@ package rules
 
 import (
 	"bufio"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,11 @@ func (l *Loader) ParseRules(appName, ruleFile string) ([]Rule, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Error("failed to close rule file", "file", ruleFile, "error", err)
+		}
+	}()
 
 	var rules []Rule
 	scanner := bufio.NewScanner(f)
