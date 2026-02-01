@@ -16,15 +16,15 @@ This tool is in early development with the hope to be useful, at least for me. *
 
 ## How to use
 
-- **Install Go** (1.21 or above)
+- **Install Mise** (https://mise.jdx.dev)
 - **Git** (optional, for repo syncing)
 - Build the binary:
   ```bash
-  go build -o cloud-savegame ./cmd/cloud-savegame
+  mise run build
   ```
 - Run the tool:
   ```bash
-  ./cloud-savegame --help
+  ./cloud_savegame --help
   ```
 
 ## ⚠️ Really important Information about the backlinking feature ⚠️
