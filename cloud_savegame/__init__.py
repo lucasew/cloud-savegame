@@ -21,15 +21,16 @@ import logging
 import os
 import re
 import socket
-import subprocess
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from collections import defaultdict
 from configparser import ConfigParser
 from pathlib import Path
 from pprint import pformat
-from shutil import SameFileError, copyfile, which
+from shutil import SameFileError, copyfile
 from time import time
 from typing import Iterator, List, Optional, Set, Tuple
+
+from .git import GitManager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -40,36 +41,7 @@ DEFAULT_CONFIG_FILE = Path(__file__).parents[0] / "demo.cfg"
 HOMEFINDER_FIND_FOLDERS = [".config", "AppData"]
 HOMEFINDER_IGNORE_FOLDERS = ["dosdevices", "nixpkgs", ".git", ".cache"]
 HOMEFINDER_DOCUMENTS_FOLDER = ["Documentos", "Documents"]
-GIT_BIN = which("git")
 NEWS_LIST = []
-
-
-def git(*params, always_show=False) -> None:
-    """
-    Execute a git command with the provided parameters.
-
-    If the `GIT_BIN` constant is None (meaning git was not found or disabled),
-    this function performs no operation.
-
-    Args:
-        *params: Command line arguments to pass to git.
-        always_show: Unused parameter (legacy).
-    """
-    if GIT_BIN is None:
-        return
-    logger.info("git: %s", " ".join(f"'{p}'" for p in params))
-    subprocess.call([GIT_BIN, *params])
-
-
-def git_is_repo_dirty() -> bool:
-    """
-    Check if the current git repository has uncommitted changes.
-
-    Returns:
-        bool: True if `git status -s` returns any output (indicating dirtiness), False otherwise.
-    """
-    status_result = subprocess.run(["git", "status", "-s"], capture_output=True, text=True)
-    return bool(status_result.stdout)
 
 
 def backup_item(item: Path, output_dir: Path) -> None:
@@ -264,7 +236,6 @@ def main() -> None:
         and invoking `ingest_path` to backup files.
     5.  **Reporting**: Generates runtime metrics and commits changes to git.
     """
-    global GIT_BIN
     config = ConfigParser()
     config["general"] = {}
     config["general"]["divider"] = ","
@@ -312,11 +283,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.git and GIT_BIN is None:
-        raise AssertionError("git required but not available")
-
-    if not args.git:
-        GIT_BIN = None
+    git_manager = GitManager(enabled=args.git)
 
     if not args.config.is_file():
         raise AssertionError("Configuration file is not actually a file")
@@ -347,14 +314,14 @@ def main() -> None:
     # Initialize git repository if needed
     if args.git:
         if not (args.output / ".git").exists():
-            git("init", "--initial-branch", "master")
-        is_repo_initially_dirty = git_is_repo_dirty()
+            git_manager.run("init", "--initial-branch", "master")
+        is_repo_initially_dirty = git_manager.is_dirty()
         if is_repo_initially_dirty:
-            git("add", "-A")
-            git("stash", "push")
-            git("stash", "pop")
-            git("add", "-A")
-            git("commit", "-m", f"dirty repo state from hostname {hostname}")
+            git_manager.run("add", "-A")
+            git_manager.run("stash", "push")
+            git_manager.run("stash", "pop")
+            git_manager.run("add", "-A")
+            git_manager.run("commit", "-m", f"dirty repo state from hostname {hostname}")
 
     def ingest_path(
         app: str,
@@ -440,10 +407,10 @@ def main() -> None:
                 logger.info(f"ingest '{path}' '{str(output_dir)}'")
                 copy_item(ppath, output_dir, args.output, args.verbose)
 
-                if args.git and git_is_repo_dirty():
+                if args.git and git_manager.is_dirty():
                     commit = f"hostname={hostname} app={app} rule={rule_name} path={path}"
-                    git("add", "-A")
-                    git("commit", "-m", commit)
+                    git_manager.run("add", "-A")
+                    git_manager.run("commit", "-m", commit)
 
             # backlink logic
             if args.backlink and top_level:
@@ -745,10 +712,10 @@ def main() -> None:
             print(f"{start_time},{finish_time - start_time}", file=f)
 
         if args.git:
-            git("add", "-A")
-            git("commit", "-m", f"run report for {hostname}")
-            git("pull", "--rebase")
-            git("push", always_show=True)
+            git_manager.run("add", "-A")
+            git_manager.run("commit", "-m", f"run report for {hostname}")
+            git_manager.run("pull", "--rebase")
+            git_manager.run("push")
 
         logger.debug(f"Homedirs processed {pformat(ALL_HOMES)}")
         logger.info("Done!")
