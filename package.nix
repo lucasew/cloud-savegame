@@ -6,7 +6,7 @@ buildGoModule {
 
   src = ./.;
 
-  vendorHash = ""; # TODO: Update this hash after first build failure
+  vendorHash = "sha256-8pPHJz311PlTU9OkSVv6xUmdB1eYbcHmaOVvO1fNRyE=";
 
   subPackages = [ "cmd/cloud-savegame" ];
 
