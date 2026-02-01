@@ -1,14 +1,22 @@
-{ python3Packages }:
-python3Packages.buildPythonApplication {
-  name = "cloud-savegame";
-  version = builtins.readFile ./cloud_savegame/VERSION;
-  pyproject = true;
+{ lib, buildGoModule }:
+
+buildGoModule {
+  pname = "cloud-savegame";
+  version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
 
   src = ./.;
 
-  build-system = [
-    python3Packages.hatchling
-  ];
+  vendorHash = "sha256-8pPHJz311PlTU9OkSVv6xUmdB1eYbcHmaOVvO1fNRyE=";
 
-  meta.mainProgram = "cloud_savegame";
+  subPackages = [ "cmd/cloud-savegame" ];
+
+  postInstall = ''
+    mv $out/bin/cloud-savegame $out/bin/cloud_savegame
+  '';
+
+  meta = with lib; {
+    description = "Cloud Savegame Backup Tool";
+    mainProgram = "cloud_savegame";
+    license = licenses.mit;
+  };
 }

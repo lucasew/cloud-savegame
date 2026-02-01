@@ -12,21 +12,20 @@ It copies the files to the output folder by game name and grouping. Ex: screensh
 
 A configuration file is required to use the program. An example one is provided in the repo and was used to test the software.
 
-No Windows support is planned although it should work the same way because we don't depend on specific platform stuff (pathlib is extensively used here and it's multiplatform).
-
 This tool is in early development with the hope to be useful, at least for me. **I am not responsible if your backup fails for some reason**.
 
 ## How to use
 
-- Install Python
-  - 3.10 or above is recommended
-  - Should work above 3.8
-  - Not sure if 3.5 has all the stuff it use, but should work
-  - Python incompatibilites should be obvios (like give you a missing import error)
-- Git (optional)
-  - If you want repo syncing this is required
-- Run the backup.py script using Python
-  - `--help` will give you all information you need
+- **Install Mise** (https://mise.jdx.dev)
+- **Git** (optional, for repo syncing)
+- Build the binary:
+  ```bash
+  mise run build
+  ```
+- Run the tool:
+  ```bash
+  ./cloud_savegame --help
+  ```
 
 ## ⚠️ Really important Information about the backlinking feature ⚠️
 
@@ -40,17 +39,13 @@ This tool is in early development with the hope to be useful, at least for me. *
 
 ## Configuration reference
 
-The configuration follows the INI format and it's parsed by Python's native
-[configparser](https://docs.python.org/3/library/configparser.html).
+The configuration follows the INI format.
 
 This means:
 
 - Comments start with `#`.
-- No need to scape items, like no need to use `"` to define strings.
 - No nesting as we have in YAML, it's a map of maps of strings and
   that's it.
-- No need to install anything else, only the standard non-jurassic
-  Python 3 is required, and Git if you want the Full Experience®.
 
 For clarification sake, I will reference the options as `section.subsection`.
 If I say set `eoq.trabson` to "huehuebrbr" then it would be the following code:
@@ -62,13 +57,13 @@ trabson=huehuebrbr
 # yay, ini supports comments
 ```
 
-There is a simple layer of "typing" over configparser primitives.
+There is a simple layer of "typing" over INI primitives.
 
 - String: the normal behaviour one can expect
 - List: list of strings, separated by the value of `general.divider`
-- Paths: list of paths, separated by the value of `general.divider`
-- Boolean: if the value exists then it's true, otherwise it's false. To set
-  it to false you have to comment it out
+- Paths: list of paths, separated by the value of `general.divider`. Tilde (`~`) is expanded to user home.
+- Boolean: if the value exists (key is present) then it's true, otherwise it's false. To set
+  it to false you have to remove/comment it out.
 
 ### Core sections
 
@@ -87,9 +82,8 @@ There is a simple layer of "typing" over configparser primitives.
 As you may have deduced, the automatic search system only looks
 for home directories. Our definition of home directory is a directory
 that has any of the items defined in the top level variable
-`HOMEFINDER_FIND_FOLDERS`. That's it. If it has any of these items
-then it's in. (<-- This definition may change in the future. If the
-code seems inconsistent with this statement then please report)
+`HOMEFINDER_FIND_FOLDERS` (currently `.config` and `AppData`). That's it. If it has any of these items
+then it's in.
 
 ### App specific sections
 
@@ -108,9 +102,7 @@ in the rules folder to get the exact name.
 
 Rules are our domain specific language to add support for new apps and games.
 
-Windows support shouldn't be a problem as we use pathlib everywhere and it deals
-with Windows issues fine (such as that \ instead of / thing), but if submitting rules
-please have preference with the format that is already being used.
+We use `filepath` which handles cross-platform path separators.
 
 ### Special variables
 
@@ -122,17 +114,6 @@ please have preference with the format that is already being used.
   have installdir specified in the configuration file for the rule to work.
 
 ## FAQ
-
-> Why Python?
-
-It doesn't give me headaches, I flow very well, it's pragmatic and simple AF and not slow enough to make me angry.
-
-And also, as I did it with only the standard library, it's easier to distribute.
-
-BTW most of this language discussion is bs. Most of the projects not even see the sunlight to get real
-load so deliver quickly then optimize on demand.
-
-I WILL NOT REWRITE THIS IN RUST.
 
 > Why this exsits?
 
