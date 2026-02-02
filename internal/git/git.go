@@ -9,13 +9,16 @@ import (
 	"strings"
 )
 
-// Wrapper handles git operations.
+// Wrapper provides an abstraction for Git operations within a specific directory.
+// It ensures Git is available and handles command execution.
 type Wrapper struct {
 	gitBin string
 	dir    string
 }
 
-// New creates a new git wrapper. If dir is empty, uses current working directory.
+// New creates a new Git Wrapper instance.
+// It searches for the 'git' binary in the system PATH.
+// If dir is empty, operations will run in the current working directory.
 func New(dir string) *Wrapper {
 	bin, err := exec.LookPath("git")
 	if err != nil {
@@ -27,12 +30,13 @@ func New(dir string) *Wrapper {
 	}
 }
 
-// Available returns true if git is available.
+// Available checks if the Git binary was successfully found during initialization.
 func (g *Wrapper) Available() bool {
 	return g != nil && g.gitBin != ""
 }
 
-// Exec executes a git command.
+// Exec executes a Git command with the provided arguments.
+// It streams stdout and stderr to the parent process's outputs.
 func (g *Wrapper) Exec(ctx context.Context, args ...string) error {
 	if !g.Available() {
 		return nil
@@ -45,7 +49,8 @@ func (g *Wrapper) Exec(ctx context.Context, args ...string) error {
 	return cmd.Run()
 }
 
-// IsRepoDirty returns true if there are uncommitted changes.
+// IsRepoDirty checks if there are any uncommitted changes in the repository.
+// It uses 'git status -s' and returns true if the output is non-empty.
 func (g *Wrapper) IsRepoDirty(ctx context.Context) (bool, error) {
 	if !g.Available() {
 		return false, nil
@@ -61,7 +66,8 @@ func (g *Wrapper) IsRepoDirty(ctx context.Context) (bool, error) {
 	return out.Len() > 0, nil
 }
 
-// Init initializes a git repo if not exists.
+// Init initializes a new Git repository if one does not already exist.
+// It checks for the existence of the '.git' directory before running 'git init'.
 func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	if !g.Available() {
 		return nil
@@ -76,6 +82,8 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	return g.Exec(ctx, "init", "--initial-branch", initialBranch)
 }
 
+// Commit creates a new commit with the specified message.
+// It safely passes the commit message via stdin using '--file=-' to avoid command line length limits or character escaping issues.
 func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	if !g.Available() {
 		return nil
