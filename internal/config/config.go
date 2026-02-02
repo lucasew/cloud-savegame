@@ -1,3 +1,4 @@
+// Package config handles configuration loading and retrieval.
 package config
 
 import (
@@ -8,14 +9,17 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// Config holds the configuration data.
 type Config struct {
 	file *ini.File
 }
 
+// New creates a new Config instance.
 func New() *Config {
 	return &Config{}
 }
 
+// Load reads the configuration from a file.
 func (c *Config) Load(path string) error {
 	f, err := ini.Load(path)
 	if err != nil {
@@ -25,6 +29,7 @@ func (c *Config) Load(path string) error {
 	return nil
 }
 
+// GetStr returns a string value from the config.
 func (c *Config) GetStr(section, key string) string {
 	if c.file == nil {
 		return ""
@@ -44,6 +49,7 @@ func (c *Config) GetBool(section, key string) bool {
 	return c.file.Section(section).HasKey(key)
 }
 
+// GetList returns a list of strings split by the configured divider.
 func (c *Config) GetList(section, key string) []string {
 	divider := c.GetStr("general", "divider")
 	if divider == "" {
@@ -64,6 +70,7 @@ func (c *Config) GetList(section, key string) []string {
 	return result
 }
 
+// GetPaths returns a list of paths with home directory expansion and absolute path resolution.
 func (c *Config) GetPaths(section, key string) []string {
 	list := c.GetList(section, key)
 	var result []string

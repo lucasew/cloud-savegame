@@ -1,3 +1,4 @@
+// Package rules handles loading and parsing of rule files.
 package rules
 
 import (
@@ -9,21 +10,25 @@ import (
 	"github.com/lucasew/cloud-savegame/internal/config"
 )
 
+// Rule represents a single rule mapping a name to a path.
 type Rule struct {
 	Name string
 	Path string
 }
 
+// RuleFile represents a file containing rules.
 type RuleFile struct {
 	FS   fs.FS
 	Path string
 }
 
+// Loader handles loading and parsing of rules.
 type Loader struct {
 	Cfg     *config.Config
 	Sources []fs.FS
 }
 
+// NewLoader creates a new rules Loader.
 func NewLoader(cfg *config.Config, sources []fs.FS) *Loader {
 	return &Loader{
 		Cfg:     cfg,

@@ -1,3 +1,4 @@
+// Package backup provides the core backup engine logic.
 package backup
 
 import (
@@ -15,6 +16,7 @@ import (
 	"github.com/lucasew/cloud-savegame/internal/rules"
 )
 
+// Engine is the core backup logic engine.
 type Engine struct {
 	Cfg          *config.Config
 	Git          *git.Wrapper
@@ -28,6 +30,7 @@ type Engine struct {
 	NewsList     []string
 }
 
+// NewEngine creates a new backup engine.
 func NewEngine(cfg *config.Config, g *git.Wrapper, rl *rules.Loader, outputDir string) *Engine {
 	hostname, _ := os.Hostname()
 	return &Engine{
@@ -40,11 +43,13 @@ func NewEngine(cfg *config.Config, g *git.Wrapper, rl *rules.Loader, outputDir s
 	}
 }
 
+// WarningNews adds a warning message to the news list and logs it.
 func (e *Engine) WarningNews(msg string) {
 	e.NewsList = append(e.NewsList, msg)
 	slog.Warn(msg)
 }
 
+// IsPathIgnored checks if a path is in the ignored list.
 func (e *Engine) IsPathIgnored(path string) bool {
 	path, _ = filepath.Abs(path)
 	for _, ignored := range e.IgnoredPaths {
@@ -55,6 +60,7 @@ func (e *Engine) IsPathIgnored(path string) bool {
 	return false
 }
 
+// BackupItem moves an item to a backup directory with a timestamp.
 func (e *Engine) BackupItem(item, outputDir string) {
 	backupDir := filepath.Join(outputDir, "__backup__")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
@@ -72,6 +78,7 @@ func (e *Engine) BackupItem(item, outputDir string) {
 	e.WarningNews(fmt.Sprintf("Moved potentially conflicting item '%s' to the backup directory at '%s'.", item, backupTarget))
 }
 
+// CopyItem copies a file or directory recursively.
 func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	// Verbose logging
 	if e.Verbose {
@@ -162,6 +169,7 @@ func copyFile(src, dst string) error {
 	return err
 }
 
+// IngestPath processes a path for backup, handling globbing and security checks.
 func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePath string) {
 	// Security: base_path check
 	if basePath != "" {

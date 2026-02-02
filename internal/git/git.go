@@ -1,3 +1,4 @@
+// Package git provides a wrapper around the git command line tool.
 package git
 
 import (
@@ -76,6 +77,7 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	return g.Exec(ctx, "init", "--initial-branch", initialBranch)
 }
 
+// Commit creates a git commit with the given message using stdin.
 func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	if !g.Available() {
 		return nil

@@ -1,0 +1,19 @@
+version: 2
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - revive
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: false

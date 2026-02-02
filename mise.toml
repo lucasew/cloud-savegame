@@ -12,9 +12,17 @@ description = "Install dependencies"
 run = "echo \"No codegen needed\""
 description = "Update generated code"
 
-[tasks.build]
+[tasks."build:go"]
 run = "go build -o cloud_savegame ./cmd/cloud-savegame"
 description = "Build binary"
+
+[tasks."build:nix"]
+run = "if command -v nix-build >/dev/null 2>&1; then nix-build; else echo 'nix-build not found, skipping'; fi"
+description = "Build with Nix"
+
+[tasks.build]
+depends = ["build:*"]
+description = "Build all targets"
 
 [tasks."lint:go"]
 run = "golangci-lint run"
@@ -45,7 +53,7 @@ depends = ["fmt:*"]
 description = "Run all formatters"
 
 [tasks.test]
-run = "go test ./..."
+run = "go test -v ./..."
 description = "Run tests"
 
 [tasks.ci]

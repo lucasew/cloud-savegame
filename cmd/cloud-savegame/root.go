@@ -55,7 +55,7 @@ func init() {
 	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 10, "Max depth for filesystem searches")
 }
 
-func run(cmd *cobra.Command, args []string) {
+func run(cmd *cobra.Command, _ []string) {
 	// Setup logging
 	lvl := slog.LevelInfo
 	if verbose {
