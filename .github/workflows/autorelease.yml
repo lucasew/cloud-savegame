@@ -38,7 +38,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install Mise
-      uses: jdx/mise-action@v5
+      uses: jdx/mise-action@v3
 
     - name: Install Nix
       uses: cachix/install-nix-action@v30
