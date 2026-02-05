@@ -164,6 +164,15 @@ func copyFile(src, dst string) error {
 
 func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePath string) {
 	// Security: base_path check
+	// If no base path is provided, we default to the current working directory to prevent
+	// relative path traversal (e.g. "../secret").
+	if basePath == "" {
+		cwd, err := os.Getwd()
+		if err == nil {
+			basePath = cwd
+		}
+	}
+
 	if basePath != "" {
 		resolvedPath, err := filepath.Abs(pathStr)
 		resolvedBase, err2 := filepath.Abs(basePath)
@@ -174,8 +183,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 			}
 		}
 	} else {
-		// No base path: disallow absolute paths unless they are globs?
-		// Python: elif "*" not in path and Path(path).is_absolute():
+		// Fallback if Getwd failed (unlikely), keep original absolute check
 		if !strings.Contains(pathStr, "*") && filepath.IsAbs(pathStr) {
 			e.WarningNews(fmt.Sprintf("Security: Absolute path '%s' for app '%s' is not allowed in rules. Skipping.", pathStr, app))
 			return
