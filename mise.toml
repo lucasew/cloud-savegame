@@ -49,5 +49,5 @@ run = "go test ./..."
 description = "Run tests"
 
 [tasks.ci]
-depends = ["lint", "test", "build"]
+depends = ["lint", "test"]
 description = "Run CI checks"

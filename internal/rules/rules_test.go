@@ -7,7 +7,7 @@ import (
 
 	"github.com/lucasew/cloud-savegame/internal/config"
 	"github.com/lucasew/cloud-savegame/internal/rules"
-    "io/fs"
+	"io/fs"
 )
 
 func TestParseRules(t *testing.T) {

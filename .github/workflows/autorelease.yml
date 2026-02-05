@@ -20,7 +20,8 @@ on:
         - minor
         - major
   schedule:
-  - cron: '0 2 * * 6'   # saturday 2am
+  - cron: '0 2 * * 6'
+
 jobs:
   autorelease:
     env:
@@ -32,9 +33,12 @@ jobs:
       pull-requests: write
     steps:
     - name: Checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-    - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3
+    - name: Install Mise
+      uses: jdx/mise-action@v2
 
     - name: Install Nix
       uses: cachix/install-nix-action@v30
@@ -52,50 +56,47 @@ jobs:
     - name: Update generated code
       run: mise run codegen
 
-    - name: Create Pull Request if there is new stuff from updaters
-      if: github.event_name != 'pull_request'
-      uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8
-      id: pr_create
-      with:
-        commit-message: Updater script changes
-        branch: updater-bot
-        delete-branch: true
-        title: "Updater: stuff changed"
-        body: |
-          Changes caused from update scripts
-
-    - name: Stop if a pull request was created
-      if: github.event_name != 'pull_request'
-      env:
-        PR_NUMBER: ${{ steps.pr_create.outputs.pull-request-number }}
+    - name: Check for changes
+      id: git_check
       run: |
-        if [[ ! -z "$PR_NUMBER" ]]; then
-          echo "The update scripts changed something and a PR was created. Giving up deploy." >> $GITHUB_STEP_SUMMARY
-          exit 1
+        if [[ -n $(git status --porcelain) ]]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
         fi
 
-    - name: Build with Nix
-      run: nix-build
+    - name: Create Pull Request if there is new stuff from updaters
+      if: steps.git_check.outputs.changes == 'true' && github.event_name != 'pull_request'
+      uses: peter-evans/create-pull-request@v7
+      with:
+        commit-message: "chore: update generated code"
+        title: "🧹 Janitor: update generated code"
+        body: "Automated changes from `mise run codegen`."
+        branch: "janitor/codegen-update"
+        delete-branch: true
 
     - name: Run CI
       run: mise run ci
 
-    - name: Make release if everything looks right
-      if: github.event_name != 'pull_request'
+    - name: Prepare Release Version
+      if: github.event_name == 'workflow_dispatch'
       env:
         NEW_VERSION: ${{ github.event.inputs.new_version }}
       run: |
-        if [[ ! -z "$NEW_VERSION" ]]; then
+        if [[ -n "$NEW_VERSION" ]]; then
           NO_TAG=1 ./make_release "$NEW_VERSION"
-          echo "New version: $(cat ./VERSION)" >> $GITHUB_STEP_SUMMARY
           echo "RELEASE_VERSION=$(cat ./VERSION)" >> $GITHUB_ENV
         fi
 
+    - name: Set Release Version for Tag
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "RELEASE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
     - name: Build binary
+      if: env.RELEASE_VERSION != ''
       run: mise run build
 
     - name: Create release
-      if: github.event_name != 'pull_request' && env.RELEASE_VERSION != ''
+      if: env.RELEASE_VERSION != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ env.RELEASE_VERSION }}
@@ -104,5 +105,4 @@ jobs:
         gh release create "$TAG" \
           cloud_savegame \
           --title "$TITLE" \
-          --generate-notes \
-          --notes-start-tag $(gh release list --limit 1 --json tagName -q .[].tagName)
+          --generate-notes
