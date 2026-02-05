@@ -15,6 +15,8 @@ import (
 	"github.com/lucasew/cloud-savegame/internal/rules"
 )
 
+// Engine manages the backup and restore process.
+// It orchestrates reading configuration, git operations, and rule processing.
 type Engine struct {
 	Cfg          *config.Config
 	Git          *git.Wrapper
@@ -28,6 +30,9 @@ type Engine struct {
 	NewsList     []string
 }
 
+// NewEngine creates a new Engine instance.
+// It initializes the engine with the provided configuration, git wrapper, rules loader, and output directory.
+// It also sets the default MaxDepth to 10 and captures the current hostname.
 func NewEngine(cfg *config.Config, g *git.Wrapper, rl *rules.Loader, outputDir string) *Engine {
 	hostname, _ := os.Hostname()
 	return &Engine{
@@ -40,11 +45,15 @@ func NewEngine(cfg *config.Config, g *git.Wrapper, rl *rules.Loader, outputDir s
 	}
 }
 
+// WarningNews appends a warning message to the news list and logs it as a warning.
+// The news list is used to report issues to the user at the end of execution.
 func (e *Engine) WarningNews(msg string) {
 	e.NewsList = append(e.NewsList, msg)
 	slog.Warn(msg)
 }
 
+// IsPathIgnored checks if the given path matches any of the configured ignored paths.
+// It resolves the path to an absolute path before checking prefixes.
 func (e *Engine) IsPathIgnored(path string) bool {
 	path, _ = filepath.Abs(path)
 	for _, ignored := range e.IgnoredPaths {
@@ -55,6 +64,8 @@ func (e *Engine) IsPathIgnored(path string) bool {
 	return false
 }
 
+// BackupItem moves an item to a timestamped backup directory within the output directory.
+// This is used to preserve existing files that would otherwise be overwritten or lost during operations.
 func (e *Engine) BackupItem(item, outputDir string) {
 	backupDir := filepath.Join(outputDir, "__backup__")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
@@ -72,6 +83,11 @@ func (e *Engine) BackupItem(item, outputDir string) {
 	e.WarningNews(fmt.Sprintf("Moved potentially conflicting item '%s' to the backup directory at '%s'.", item, backupTarget))
 }
 
+// CopyItem recursively copies a file or directory from inputItem to destination.
+// It includes several safety checks:
+// 1. Loop detection: Prevents copying if the source is inside the output directory.
+// 2. Symlink handling: Skips symlinks to avoid recursion loops or broken links.
+// 3. Timestamp check: Skips copying if the destination is newer than the source (unless forced).
 func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	// Verbose logging
 	if e.Verbose {
@@ -162,6 +178,22 @@ func copyFile(src, dst string) error {
 	return err
 }
 
+// IngestPath processes a single path rule, handling globs, security checks, copying, and backlinking.
+//
+// Security:
+// It strictly validates that `pathStr` is contained within `basePath` if provided, preventing path traversal attacks.
+// Absolute paths are disallowed unless they are glob patterns.
+//
+// Glob Handling:
+// If the path contains a wildcard (*), it expands the glob and recursively calls IngestPath for each match.
+// It correctly handles matches in both the source and existing output directory to support syncing.
+//
+// Git Integration:
+// If Git is configured, it commits changes after each successful ingestion.
+//
+// Backlinking:
+// If enabled (`e.Backlink`), it replaces the original file with a symlink to the backup location.
+// Before creating the symlink, it backs up the original file to avoid data loss.
 func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePath string) {
 	// Security: base_path check
 	if basePath != "" {
@@ -278,7 +310,9 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 	}
 }
 
-// SearchForHomes is recursive
+// SearchForHomes recursively searches for potential game root directories starting from startDir.
+// It uses a heuristic to identify game roots by looking for common subdirectories like ".config" or "AppData".
+// It avoids traversing into ignored folders (e.g., ".git", "nixpkgs") to improve performance.
 func (e *Engine) SearchForHomes(startDir string, maxDepth int) []string {
 	var homes []string
 	if maxDepth <= 0 || e.IsPathIgnored(startDir) {
