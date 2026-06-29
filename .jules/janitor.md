@@ -18,3 +18,10 @@
 **Root Cause:** Tooling was configured ad-hoc or missing.
 **Solution:** I installed `go-task` and `dprint`, configured `Taskfile.yml` with `lint` and `fmt` tasks (including wildcard subtask execution), and set up `dprint.json`. I also updated `mise.toml` to include these tools.
 **Pattern:** Centralizing development tasks in a `Taskfile.yml` and using `mise` for tool management ensures a consistent developer experience and simpler CI integration.
+
+## 2026-06-29 - Centralize error reporting
+
+**Issue:** The project was using `slog.Error` directly throughout the codebase.
+**Root Cause:** The project conventions require a centralized error-reporting function, but none existed.
+**Solution:** I created `internal/errors.Report` which wraps `slog.Error` and replaced all occurrences in the codebase to use it.
+**Pattern:** All code paths that handle unexpected errors MUST funnel through a single centralized error-reporting function. Direct calls to underlying loggers for errors are forbidden.
