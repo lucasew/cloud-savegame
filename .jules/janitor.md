@@ -18,3 +18,5 @@
 **Root Cause:** Tooling was configured ad-hoc or missing.
 **Solution:** I installed `go-task` and `dprint`, configured `Taskfile.yml` with `lint` and `fmt` tasks (including wildcard subtask execution), and set up `dprint.json`. I also updated `mise.toml` to include these tools.
 **Pattern:** Centralizing development tasks in a `Taskfile.yml` and using `mise` for tool management ensures a consistent developer experience and simpler CI integration.
+
+- 2026-06-30: [maintainability] Centralized error reporting by creating internal/reporter package and migrating scattered slog.Error calls to reporter.Report.
