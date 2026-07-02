@@ -2,8 +2,8 @@ package rules
 
 import (
 	"bufio"
+	"github.com/lucasew/cloud-savegame/internal/reporter"
 	"io/fs"
-	"log/slog"
 	"strings"
 
 	"github.com/lucasew/cloud-savegame/internal/config"
@@ -54,7 +54,7 @@ func (l *Loader) GetApps() (map[string]RuleFile, error) {
 			return nil
 		})
 		if err != nil {
-			slog.Error("failed to walk rules fs", "error", err)
+			reporter.Report("failed to walk rules fs", "error", err)
 			// Continue to next source?
 		}
 	}
@@ -69,7 +69,7 @@ func (l *Loader) ParseRules(appName string, rf RuleFile) ([]Rule, error) {
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			slog.Error("failed to close rule file", "file", rf.Path, "error", err)
+			reporter.Report("failed to close rule file", "file", rf.Path, "error", err)
 		}
 	}()
 
