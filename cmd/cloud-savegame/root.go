@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/lucasew/cloud-savegame/internal/reporter"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -69,20 +70,20 @@ func run(cmd *cobra.Command, args []string) {
 	if useGit {
 		_, err := exec.LookPath("git")
 		if err != nil {
-			slog.Error("git required but not available")
+			reporter.Report("git required but not available")
 			os.Exit(1)
 		}
 	}
 
 	if _, err := os.Stat(cfgFile); os.IsNotExist(err) {
-		slog.Error("Configuration file is not actually a file", "path", cfgFile)
+		reporter.Report("Configuration file is not actually a file", "path", cfgFile)
 		os.Exit(1)
 	}
 
 	outPath, _ := filepath.Abs(outputDir)
 	if _, err := os.Stat(outPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(outPath, 0755); err != nil {
-			slog.Error("Failed to create output dir", "error", err)
+			reporter.Report("Failed to create output dir", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -90,7 +91,7 @@ func run(cmd *cobra.Command, args []string) {
 	cfg := config.New()
 	slog.Debug("loading configuration file", "path", cfgFile)
 	if err := cfg.Load(cfgFile); err != nil {
-		slog.Error("Failed to load config", "error", err)
+		reporter.Report("Failed to load config", "error", err)
 		os.Exit(1)
 	}
 
@@ -100,7 +101,7 @@ func run(cmd *cobra.Command, args []string) {
 		g = git.New(outPath) // Git operations in output dir
 		if _, err := os.Stat(filepath.Join(outPath, ".git")); os.IsNotExist(err) {
 			if err := g.Init(cmd.Context(), "master"); err != nil {
-				slog.Error("git init failed", "error", err)
+				reporter.Report("git init failed", "error", err)
 			}
 		}
 		dirty, _ := g.IsRepoDirty(cmd.Context())
@@ -122,7 +123,7 @@ func run(cmd *cobra.Command, args []string) {
 	if err := os.MkdirAll(customRulesDir, 0755); err == nil {
 		ruleSources = append(ruleSources, os.DirFS(customRulesDir))
 	} else {
-		slog.Error("Failed to mkdir custom rules", "error", err)
+		reporter.Report("Failed to mkdir custom rules", "error", err)
 	}
 
 	rl := rules.NewLoader(cfg, ruleSources)
