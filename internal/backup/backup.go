@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"github.com/lucasew/cloud-savegame/internal/reporter"
 	"io"
 	"log/slog"
 	"os"
@@ -69,14 +70,14 @@ func (e *Engine) IsPathIgnored(path string) bool {
 func (e *Engine) BackupItem(item, outputDir string) {
 	backupDir := filepath.Join(outputDir, "__backup__")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		slog.Error("failed to create backup dir", "path", backupDir, "error", err)
+		reporter.Report("failed to create backup dir", "path", backupDir, "error", err)
 		return
 	}
 	name := filepath.Base(item)
 	backupTarget := filepath.Join(backupDir, fmt.Sprintf("%s.%d", name, time.Now().Unix()))
 
 	if err := os.Rename(item, backupTarget); err != nil {
-		slog.Error("failed to move item to backup", "item", item, "target", backupTarget, "error", err)
+		reporter.Report("failed to move item to backup", "item", item, "target", backupTarget, "error", err)
 		return
 	}
 	slog.Info("Moved item to backup", "item", item, "target", backupTarget)
@@ -115,7 +116,7 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 
 	if info.IsDir() {
 		if err := os.MkdirAll(destination, 0755); err != nil {
-			slog.Error("failed to mkdir", "path", destination, "error", err)
+			reporter.Report("failed to mkdir", "path", destination, "error", err)
 			return
 		}
 		entries, err := os.ReadDir(inputItem)
@@ -144,13 +145,13 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 		}
 
 		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
-			slog.Error("failed to mkdir parent", "path", filepath.Dir(destination), "error", err)
+			reporter.Report("failed to mkdir parent", "path", filepath.Dir(destination), "error", err)
 			return
 		}
 
 		slog.Info("copy_item: Copying", "src", inputItem, "dst", destination)
 		if err := copyFile(inputItem, destination); err != nil {
-			slog.Error("copy failed", "error", err)
+			reporter.Report("copy failed", "error", err)
 		}
 	}
 }
@@ -162,7 +163,7 @@ func copyFile(src, dst string) error {
 	}
 	defer func() {
 		if err := s.Close(); err != nil {
-			slog.Error("failed to close src", "error", err)
+			reporter.Report("failed to close src", "error", err)
 		}
 	}()
 	d, err := os.Create(dst)
@@ -171,7 +172,7 @@ func copyFile(src, dst string) error {
 	}
 	defer func() {
 		if err := d.Close(); err != nil {
-			slog.Error("failed to close dst", "error", err)
+			reporter.Report("failed to close dst", "error", err)
 		}
 	}()
 	_, err = io.Copy(d, s)
@@ -226,7 +227,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 		pattern := filepath.Base(pathStr)
 
 		if strings.Contains(dir, "*") {
-			slog.Error("globs in any path segment but the last are unsupported", "app", app, "rule", ruleName, "path", pathStr)
+			reporter.Report("globs in any path segment but the last are unsupported", "app", app, "rule", ruleName, "path", pathStr)
 			return
 		}
 
@@ -265,10 +266,10 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 				if isDirty {
 					commitMsg := fmt.Sprintf("hostname=%s app=%s rule=%s path=%s", e.Hostname, app, ruleName, pathStr)
 					if err := e.Git.Exec(context.TODO(), "add", "-A"); err != nil {
-						slog.Error("git add failed", "error", err)
+						reporter.Report("git add failed", "error", err)
 					}
 					if err := e.Git.Commit(context.TODO(), commitMsg); err != nil {
-						slog.Error("git commit failed", "error", err)
+						reporter.Report("git commit failed", "error", err)
 					}
 				}
 			}
@@ -279,7 +280,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 			slog.Debug("TOPLEVEL backlink", "app", app, "rule", ruleName, "path", pathStr)
 			parent := filepath.Dir(pathStr)
 			if err := os.MkdirAll(parent, 0755); err != nil {
-				slog.Error("failed to mkdir parent for backlink", "error", err)
+				reporter.Report("failed to mkdir parent for backlink", "error", err)
 			}
 
 			info, err := os.Lstat(pathStr)
@@ -288,7 +289,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 
 			if isSymlink {
 				if err := os.Remove(pathStr); err != nil {
-					slog.Error("failed to remove symlink", "path", pathStr, "error", err)
+					reporter.Report("failed to remove symlink", "path", pathStr, "error", err)
 				}
 			} else if exists {
 				e.BackupItem(pathStr, e.OutputDir)
@@ -296,7 +297,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 
 			slog.Info("ln", "src", pathStr, "target", outputDir)
 			if err := os.Symlink(outputDir, pathStr); err != nil {
-				slog.Error("failed to create symlink", "src", outputDir, "dst", pathStr, "error", err)
+				reporter.Report("failed to create symlink", "src", outputDir, "dst", pathStr, "error", err)
 			}
 		}
 
