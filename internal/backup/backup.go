@@ -194,7 +194,7 @@ func copyFile(src, dst string) error {
 // Backlinking:
 // If enabled (`e.Backlink`), it replaces the original file with a symlink to the backup location.
 // Before creating the symlink, it backs up the original file to avoid data loss.
-func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePath string) {
+func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, topLevel bool, basePath string) {
 	// Security: base_path check
 	if basePath != "" {
 		resolvedPath, err := filepath.Abs(pathStr)
@@ -250,7 +250,7 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 			if base == "" {
 				base = dir
 			}
-			e.IngestPath(app, newRuleName, item, true, base)
+			e.IngestPath(ctx, app, newRuleName, item, true, base)
 		}
 
 	} else {
@@ -261,13 +261,13 @@ func (e *Engine) IngestPath(app, ruleName, pathStr string, topLevel bool, basePa
 
 			// Git commit per file/ingest
 			if e.Git != nil {
-				isDirty, _ := e.Git.IsRepoDirty(context.TODO())
+				isDirty, _ := e.Git.IsRepoDirty(ctx)
 				if isDirty {
 					commitMsg := fmt.Sprintf("hostname=%s app=%s rule=%s path=%s", e.Hostname, app, ruleName, pathStr)
-					if err := e.Git.Exec(context.TODO(), "add", "-A"); err != nil {
+					if err := e.Git.Exec(ctx, "add", "-A"); err != nil {
 						slog.Error("git add failed", "error", err)
 					}
-					if err := e.Git.Commit(context.TODO(), commitMsg); err != nil {
+					if err := e.Git.Commit(ctx, commitMsg); err != nil {
 						slog.Error("git commit failed", "error", err)
 					}
 				}
