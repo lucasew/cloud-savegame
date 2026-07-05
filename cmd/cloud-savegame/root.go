@@ -151,7 +151,7 @@ func run(cmd *cobra.Command, args []string) {
 				}
 			}
 			if len(matches) == 0 {
-				eng.IngestPath(app, rule.Name, rule.Path, false, "")
+				eng.IngestPath(cmd.Context(), app, rule.Name, rule.Path, false, "")
 			}
 		}
 	}
@@ -181,7 +181,7 @@ func run(cmd *cobra.Command, args []string) {
 			for _, r := range appRules {
 				resolved := strings.ReplaceAll(r.Path, "$installdir", installDir)
 				if resolved != r.Path {
-					eng.IngestPath(app, r.Name, resolved, true, installDir)
+					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, installDir)
 				}
 			}
 		}
@@ -218,7 +218,7 @@ func run(cmd *cobra.Command, args []string) {
 			for _, r := range appRules {
 				resolved := strings.ReplaceAll(r.Path, "$home", home)
 				if resolved != r.Path {
-					eng.IngestPath(app, r.Name, resolved, true, home)
+					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, home)
 				}
 			}
 		}
@@ -230,7 +230,7 @@ func run(cmd *cobra.Command, args []string) {
 			for _, r := range appRules {
 				resolved := strings.ReplaceAll(r.Path, "$appdata", appdata)
 				if resolved != r.Path {
-					eng.IngestPath(app, r.Name, resolved, true, appdata)
+					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, appdata)
 				}
 			}
 		}
@@ -251,7 +251,7 @@ func run(cmd *cobra.Command, args []string) {
 						for _, r := range appRules {
 							resolved := strings.ReplaceAll(r.Path, "$program_files", pfCandidate)
 							if resolved != r.Path {
-								eng.IngestPath(app, r.Name, resolved, true, pfCandidate)
+								eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, pfCandidate)
 							}
 						}
 					}
@@ -280,7 +280,7 @@ func run(cmd *cobra.Command, args []string) {
 								for _, r := range appRules {
 									resolved := strings.ReplaceAll(r.Path, "$ubisoft", ubiVar)
 									if resolved != r.Path {
-										eng.IngestPath(app, r.Name, resolved, true, ubiVar)
+										eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, ubiVar)
 									}
 								}
 							}
@@ -300,7 +300,7 @@ func run(cmd *cobra.Command, args []string) {
 					for _, r := range appRules {
 						resolved := strings.ReplaceAll(r.Path, "$documents", docs)
 						if resolved != r.Path {
-							eng.IngestPath(app, r.Name, resolved, true, docs)
+							eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, docs)
 						}
 					}
 				}
