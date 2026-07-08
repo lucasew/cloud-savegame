@@ -11,15 +11,7 @@ import (
 
 func TestConfigLoad(t *testing.T) {
 	// Create a temporary config file
-	tmpDir, err := os.MkdirTemp("", "config_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			t.Logf("failed to remove tmp dir: %v", err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	content := `
 [general]
@@ -32,7 +24,7 @@ path=~/test/file.txt
 bool=true
 `
 	path := filepath.Join(tmpDir, "test.cfg")
-	err = os.WriteFile(path, []byte(content), 0644)
+	err := os.WriteFile(path, []byte(content), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
