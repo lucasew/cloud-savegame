@@ -11,28 +11,28 @@ import (
 )
 
 func TestIsPathIgnored(t *testing.T) {
+	ignoreMe := filepath.Join(t.TempDir(), "ignore", "me")
+	alsoIgnore := filepath.Join(t.TempDir(), "also", "ignore")
+
 	eng := &backup.Engine{
-		IgnoredPaths: []string{"/ignore/me", "/also/ignore"},
+		IgnoredPaths: []string{ignoreMe, alsoIgnore},
 	}
 
-	if !eng.IsPathIgnored("/ignore/me/subfile") {
-		t.Error("Expected /ignore/me/subfile to be ignored")
+	subfile := filepath.Join(ignoreMe, "subfile")
+	if !eng.IsPathIgnored(subfile) {
+		t.Errorf("Expected %s to be ignored", subfile)
 	}
-	if eng.IsPathIgnored("/keep/me") {
-		t.Error("Expected /keep/me to be kept")
+	keepMe := filepath.Join(t.TempDir(), "keep", "me")
+	if eng.IsPathIgnored(keepMe) {
+		t.Errorf("Expected %s to be kept", keepMe)
 	}
 }
 
 func TestIngestPathSecurity(t *testing.T) {
-	eng := backup.NewEngine(config.New(), nil, nil, "/tmp/output")
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 
-	basePath := "/safe/base"
-	// Path resolves to /safe/base/../../unsafe -> /unsafe
-	// But we need filepath.Abs to work. On linux /safe/base might not exist.
-	// filepath.Abs cleans paths.
-	// If input is "/safe/base/../unsafe", Abs("/safe/base/../unsafe") -> "/safe/unsafe".
-	// If input is "/safe/base/../../unsafe", Abs -> "/unsafe".
-
+	basePath := filepath.Join(t.TempDir(), "safe", "base")
 	unsafePath := filepath.Join(basePath, "..", "..", "unsafe")
 
 	eng.IngestPath(context.Background(), "app", "rule", unsafePath, false, basePath)
