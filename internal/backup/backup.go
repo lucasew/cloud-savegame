@@ -55,7 +55,12 @@ func (e *Engine) WarningNews(msg string) {
 // IsPathIgnored checks if the given path matches any of the configured ignored paths.
 // It resolves the path to an absolute path before checking prefixes.
 func (e *Engine) IsPathIgnored(path string) bool {
-	path, _ = filepath.Abs(path)
+	var err error
+	path, err = filepath.Abs(path)
+	if err != nil {
+		slog.Warn("failed to resolve absolute path for ignore check", "path", path, "error", err)
+		// Fallback to evaluating the original path
+	}
 	for _, ignored := range e.IgnoredPaths {
 		if strings.HasPrefix(path, ignored) {
 			return true
@@ -100,11 +105,15 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	}
 
 	// Loop detection
-	absInput, _ := filepath.Abs(inputItem)
-	absOutput, _ := filepath.Abs(outputDir)
-	if strings.HasPrefix(absInput, absOutput) {
-		slog.Warn("copy_item: Not copying: Origin is inside output", "path", inputItem)
-		return
+	absInput, err1 := filepath.Abs(inputItem)
+	absOutput, err2 := filepath.Abs(outputDir)
+	if err1 == nil && err2 == nil {
+		if strings.HasPrefix(absInput, absOutput) {
+			slog.Warn("copy_item: Not copying: Origin is inside output", "path", inputItem)
+			return
+		}
+	} else {
+		slog.Warn("failed to resolve absolute paths for loop detection", "input", inputItem, "output", outputDir)
 	}
 
 	// Symlink check
@@ -232,8 +241,14 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 
 		// Find matches in source AND output (to handle deleted files? or just logic from python)
 		// Python: names = set([x.name for x in [*parent.glob(filename), *output_dir.glob(filename)]])
-		matches, _ := filepath.Glob(pathStr)
-		outputMatches, _ := filepath.Glob(filepath.Join(outputDir, pattern))
+		matches, err := filepath.Glob(pathStr)
+		if err != nil {
+			slog.Error("failed to glob path", "path", pathStr, "error", err)
+		}
+		outputMatches, err := filepath.Glob(filepath.Join(outputDir, pattern))
+		if err != nil {
+			slog.Error("failed to glob output path", "path", filepath.Join(outputDir, pattern), "error", err)
+		}
 
 		names := make(map[string]struct{})
 		for _, m := range matches {
