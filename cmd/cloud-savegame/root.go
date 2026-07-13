@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"context"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -191,14 +192,7 @@ func run(cmd *cobra.Command, args []string) {
 			if eng.IsPathIgnored(installDir) {
 				continue
 			}
-
-			appRules, _ := rl.ParseRules(app, allApps[app])
-			for _, r := range appRules {
-				resolved := strings.ReplaceAll(r.Path, "$installdir", installDir)
-				if resolved != r.Path {
-					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, installDir)
-				}
-			}
+			processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$installdir", installDir)
 		}
 	}
 
@@ -229,25 +223,13 @@ func run(cmd *cobra.Command, args []string) {
 
 		// $home
 		for _, app := range varUsers["home"] {
-			appRules, _ := rl.ParseRules(app, allApps[app])
-			for _, r := range appRules {
-				resolved := strings.ReplaceAll(r.Path, "$home", home)
-				if resolved != r.Path {
-					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, home)
-				}
-			}
+			processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$home", home)
 		}
 
 		// $appdata
 		appdata := filepath.Join(home, "AppData")
 		for _, app := range varUsers["appdata"] {
-			appRules, _ := rl.ParseRules(app, allApps[app])
-			for _, r := range appRules {
-				resolved := strings.ReplaceAll(r.Path, "$appdata", appdata)
-				if resolved != r.Path {
-					eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, appdata)
-				}
-			}
+			processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$appdata", appdata)
 		}
 
 		// $program_files
@@ -262,13 +244,7 @@ func run(cmd *cobra.Command, args []string) {
 
 					// Process program_files
 					for _, app := range varUsers["program_files"] {
-						appRules, _ := rl.ParseRules(app, allApps[app])
-						for _, r := range appRules {
-							resolved := strings.ReplaceAll(r.Path, "$program_files", pfCandidate)
-							if resolved != r.Path {
-								eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, pfCandidate)
-							}
-						}
+						processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$program_files", pfCandidate)
 					}
 
 					// Ubisoft Logic
@@ -295,13 +271,7 @@ func run(cmd *cobra.Command, args []string) {
 						for _, uUser := range ubiUserList {
 							ubiVar := filepath.Join(ubiDir, uUser)
 							for _, app := range varUsers["ubisoft"] {
-								appRules, _ := rl.ParseRules(app, allApps[app])
-								for _, r := range appRules {
-									resolved := strings.ReplaceAll(r.Path, "$ubisoft", ubiVar)
-									if resolved != r.Path {
-										eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, ubiVar)
-									}
-								}
+								processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$ubisoft", ubiVar)
 							}
 						}
 					}
@@ -315,13 +285,7 @@ func run(cmd *cobra.Command, args []string) {
 			docs := filepath.Join(home, dc)
 			if _, err := os.Stat(docs); err == nil {
 				for _, app := range varUsers["documents"] {
-					appRules, _ := rl.ParseRules(app, allApps[app])
-					for _, r := range appRules {
-						resolved := strings.ReplaceAll(r.Path, "$documents", docs)
-						if resolved != r.Path {
-							eng.IngestPath(cmd.Context(), app, r.Name, resolved, true, docs)
-						}
-					}
+					processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$documents", docs)
 				}
 			}
 		}
@@ -371,6 +335,16 @@ func run(cmd *cobra.Command, args []string) {
 		slog.Warn("=== IMPORTANT INFORMATION ABOUT THE RUN ===")
 		for _, item := range eng.NewsList {
 			slog.Warn("- " + item)
+		}
+	}
+}
+
+func processAppRules(ctx context.Context, eng *backup.Engine, rl *rules.Loader, app string, appFile rules.RuleFile, varName string, varValue string) {
+	appRules, _ := rl.ParseRules(app, appFile)
+	for _, r := range appRules {
+		resolved := strings.ReplaceAll(r.Path, varName, varValue)
+		if resolved != r.Path {
+			eng.IngestPath(ctx, app, r.Name, resolved, true, varValue)
 		}
 	}
 }
