@@ -1,7 +1,6 @@
 package backup_test
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,7 +34,7 @@ func TestIngestPathSecurity(t *testing.T) {
 	basePath := filepath.Join(t.TempDir(), "safe", "base")
 	unsafePath := filepath.Join(basePath, "..", "..", "unsafe")
 
-	eng.IngestPath(context.Background(), "app", "rule", unsafePath, false, basePath)
+	eng.IngestPath(t.Context(), "app", "rule", unsafePath, false, basePath)
 
 	if len(eng.NewsList) == 0 {
 		t.Error("Expected security warning for unsafe path traversal")
