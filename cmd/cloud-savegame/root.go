@@ -48,7 +48,9 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", defaultCfg, "Configuration file")
 	rootCmd.Flags().StringVarP(&outputDir, "output", "o", "", "Which folder to copy backed up files")
-	_ = rootCmd.MarkFlagRequired("output")
+	if err := rootCmd.MarkFlagRequired("output"); err != nil {
+		slog.Error("failed to mark output flag required", "error", err)
+	}
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Give more detail")
 	rootCmd.Flags().BoolVarP(&useGit, "git", "g", false, "Use git for snapshot")
 	rootCmd.Flags().BoolVarP(&backlink, "backlink", "b", false, "Create symlinks at the origin")
@@ -105,12 +107,25 @@ func run(cmd *cobra.Command, args []string) {
 		}
 		dirty, _ := g.IsRepoDirty(cmd.Context())
 		if dirty {
-			host, _ := os.Hostname()
-			_ = g.Exec(cmd.Context(), "add", "-A")
-			_ = g.Exec(cmd.Context(), "stash", "push")
-			_ = g.Exec(cmd.Context(), "stash", "pop")
-			_ = g.Exec(cmd.Context(), "add", "-A")
-			_ = g.Commit(cmd.Context(), fmt.Sprintf("dirty repo state from hostname %s", host))
+			host, err := os.Hostname()
+			if err != nil {
+				host = "unknown_host"
+			}
+			if err := g.Exec(cmd.Context(), "add", "-A"); err != nil {
+				slog.Warn("git add failed", "error", err)
+			}
+			if err := g.Exec(cmd.Context(), "stash", "push"); err != nil {
+				slog.Warn("git stash push failed", "error", err)
+			}
+			if err := g.Exec(cmd.Context(), "stash", "pop"); err != nil {
+				slog.Warn("git stash pop failed", "error", err)
+			}
+			if err := g.Exec(cmd.Context(), "add", "-A"); err != nil {
+				slog.Warn("git add failed", "error", err)
+			}
+			if err := g.Commit(cmd.Context(), fmt.Sprintf("dirty repo state from hostname %s", host)); err != nil {
+				slog.Warn("git commit failed", "error", err)
+			}
 		}
 	}
 
@@ -269,8 +284,12 @@ func run(cmd *cobra.Command, args []string) {
 
 						// Write users.txt
 						ubiMetaDir := filepath.Join(outPath, "ubisoft")
-						_ = os.MkdirAll(ubiMetaDir, 0755)
-						_ = os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644)
+						if err := os.MkdirAll(ubiMetaDir, 0755); err != nil {
+							slog.Error("failed to create ubisoft meta dir", "error", err)
+						}
+						if err := os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644); err != nil {
+							slog.Error("failed to write ubisoft users", "error", err)
+						}
 
 						// Process ubisoft
 						for _, uUser := range ubiUserList {
@@ -312,22 +331,40 @@ func run(cmd *cobra.Command, args []string) {
 	slog.Info("Finishing up")
 	finishTime := time.Now()
 	metaDir := filepath.Join(outPath, "__meta__", eng.Hostname)
-	_ = os.MkdirAll(metaDir, 0755)
+	if err := os.MkdirAll(metaDir, 0755); err != nil {
+		slog.Error("failed to create meta dir", "error", err)
+	}
 
-	_ = os.WriteFile(filepath.Join(metaDir, "last_run.txt"), []byte(fmt.Sprintf("%d", finishTime.Unix())), 0644)
+	if err := os.WriteFile(filepath.Join(metaDir, "last_run.txt"), []byte(fmt.Sprintf("%d", finishTime.Unix())), 0644); err != nil {
+		slog.Error("failed to write last_run.txt", "error", err)
+	}
 
 	duration := finishTime.Sub(startTime).Seconds()
-	f, _ := os.OpenFile(filepath.Join(metaDir, "run_times.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if f != nil {
-		_, _ = fmt.Fprintf(f, "%d,%f\n", startTime.Unix(), duration)
-		_ = f.Close()
+	f, err := os.OpenFile(filepath.Join(metaDir, "run_times.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		slog.Error("failed to open run_times.txt", "error", err)
+	} else {
+		if _, err := fmt.Fprintf(f, "%d,%f\n", startTime.Unix(), duration); err != nil {
+			slog.Error("failed to write to run_times.txt", "error", err)
+		}
+		if err := f.Close(); err != nil {
+			slog.Error("failed to close run_times.txt", "error", err)
+		}
 	}
 
 	if useGit && g != nil {
-		_ = g.Exec(cmd.Context(), "add", "-A")
-		_ = g.Commit(cmd.Context(), fmt.Sprintf("run report for %s", eng.Hostname))
-		_ = g.Exec(cmd.Context(), "pull", "--rebase")
-		_ = g.Exec(cmd.Context(), "push")
+		if err := g.Exec(cmd.Context(), "add", "-A"); err != nil {
+			slog.Warn("git add failed", "error", err)
+		}
+		if err := g.Commit(cmd.Context(), fmt.Sprintf("run report for %s", eng.Hostname)); err != nil {
+			slog.Warn("git commit failed", "error", err)
+		}
+		if err := g.Exec(cmd.Context(), "pull", "--rebase"); err != nil {
+			slog.Warn("git pull failed", "error", err)
+		}
+		if err := g.Exec(cmd.Context(), "push"); err != nil {
+			slog.Warn("git push failed", "error", err)
+		}
 	}
 
 	if len(eng.NewsList) > 0 {
