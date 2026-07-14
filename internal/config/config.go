@@ -64,9 +64,8 @@ func (c *Config) GetList(section, key string) []string {
 	if raw == "" {
 		return nil
 	}
-	parts := strings.Split(raw, divider)
 	var result []string
-	for _, p := range parts {
+	for p := range strings.SplitSeq(raw, divider) {
 		if trimmed := strings.TrimSpace(p); trimmed != "" {
 			result = append(result, trimmed)
 		}
