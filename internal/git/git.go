@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -56,19 +57,24 @@ func (g *Wrapper) IsRepoDirty(ctx context.Context) (bool, error) {
 	if !g.Available() {
 		return false, nil
 	}
-	// git status -s
 	cmd := exec.CommandContext(ctx, g.gitBin, "status", "-s")
 	cmd.Dir = g.dir
-	var out bytes.Buffer
+	var out, errBuf bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
-		return false, err
+		msg := strings.TrimSpace(errBuf.String())
+		if msg != "" {
+			return false, fmt.Errorf("git status: %w: %s", err, msg)
+		}
+		return false, fmt.Errorf("git status: %w", err)
 	}
 	return out.Len() > 0, nil
 }
 
 // Init initializes a new Git repository if one does not already exist.
 // It checks for the existence of the '.git' directory before running 'git init'.
+// Permission or other Stat failures are returned instead of falling through to init.
 func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	if !g.Available() {
 		return nil
@@ -77,24 +83,29 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	if g.dir != "" {
 		gitDir = filepath.Join(g.dir, ".git")
 	}
-	if _, err := os.Stat(gitDir); err == nil {
+	_, err := os.Stat(gitDir)
+	if err == nil {
 		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
 	}
 	return g.Exec(ctx, "init", "--initial-branch", initialBranch)
 }
 
 // Commit creates a new commit with the specified message.
-// It safely passes the commit message via stdin using '--file=-' to avoid command line length limits or character escaping issues.
+// It passes the commit message via stdin using '--file=-' to avoid shell
+// escaping issues and command-line length limits.
 func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	if !g.Available() {
 		return nil
 	}
-	// Secure commit using --file=- to read message from stdin
 	cmd := exec.CommandContext(ctx, g.gitBin, "commit", "--file=-")
 	cmd.Dir = g.dir
 	cmd.Stdin = strings.NewReader(message)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	slog.Info("git", "args", []string{"commit", "-m", "..."}) // Log without message to avoid clutter/secrets? or log message.
+	// Log flags only; omit the message body to avoid leaking sensitive content.
+	slog.Info("git", "args", []string{"commit", "--file=-"})
 	return cmd.Run()
 }
