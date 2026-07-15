@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -156,6 +156,7 @@ func run(cmd *cobra.Command, args []string) {
 	for app, rf := range allApps {
 		r, err := rl.ParseRules(app, rf)
 		if err != nil {
+			slog.Error("failed to parse rules", "app", app, "error", err)
 			continue
 		}
 		for _, rule := range r {
@@ -340,7 +341,11 @@ func run(cmd *cobra.Command, args []string) {
 }
 
 func processAppRules(ctx context.Context, eng *backup.Engine, rl *rules.Loader, app string, appFile rules.RuleFile, varName string, varValue string) {
-	appRules, _ := rl.ParseRules(app, appFile)
+	appRules, err := rl.ParseRules(app, appFile)
+	if err != nil {
+		slog.Error("failed to parse rules", "app", app, "error", err)
+		return
+	}
 	for _, r := range appRules {
 		resolved := strings.ReplaceAll(r.Path, varName, varValue)
 		if resolved != r.Path {
