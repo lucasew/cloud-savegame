@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -74,7 +75,7 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	}
 	gitDir := ".git"
 	if g.dir != "" {
-		gitDir = g.dir + "/.git"
+		gitDir = filepath.Join(g.dir, ".git")
 	}
 	if _, err := os.Stat(gitDir); err == nil {
 		return nil
