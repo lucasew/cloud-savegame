@@ -1,8 +1,8 @@
-# Go
-cloud-savegame
-cloud_savegame
-cloud-savegame.exe
-cloud_savegame.exe
+# Go binaries at repo root (do not ignore cmd/cloud-savegame/)
+/cloud-savegame
+/cloud_savegame
+/cloud-savegame.exe
+/cloud_savegame.exe
 *.exe
 *.test
 *.out
