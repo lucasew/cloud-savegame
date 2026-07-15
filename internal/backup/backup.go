@@ -52,8 +52,21 @@ func (e *Engine) WarningNews(msg string) {
 	slog.Warn(msg)
 }
 
+// pathContained reports whether child is the same as parent or is a path under parent.
+// Both paths should already be absolute or otherwise comparable after Clean.
+// Unlike bare strings.HasPrefix, this rejects siblings such as "/foo" vs "/foobar".
+func pathContained(child, parent string) bool {
+	child = filepath.Clean(child)
+	parent = filepath.Clean(parent)
+	if child == parent {
+		return true
+	}
+	sep := string(os.PathSeparator)
+	return strings.HasPrefix(child, parent+sep)
+}
+
 // IsPathIgnored checks if the given path matches any of the configured ignored paths.
-// It resolves the path to an absolute path before checking prefixes.
+// It resolves the path to an absolute path before checking containment.
 func (e *Engine) IsPathIgnored(path string) bool {
 	var err error
 	path, err = filepath.Abs(path)
@@ -62,7 +75,7 @@ func (e *Engine) IsPathIgnored(path string) bool {
 		// Fallback to evaluating the original path
 	}
 	for _, ignored := range e.IgnoredPaths {
-		if strings.HasPrefix(path, ignored) {
+		if pathContained(path, ignored) {
 			return true
 		}
 	}
@@ -108,7 +121,7 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	absInput, err1 := filepath.Abs(inputItem)
 	absOutput, err2 := filepath.Abs(outputDir)
 	if err1 == nil && err2 == nil {
-		if strings.HasPrefix(absInput, absOutput) {
+		if pathContained(absInput, absOutput) {
 			slog.Warn("copy_item: Not copying: Origin is inside output", "path", inputItem)
 			return
 		}
@@ -209,7 +222,7 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 		resolvedPath, err := filepath.Abs(pathStr)
 		resolvedBase, err2 := filepath.Abs(basePath)
 		if err == nil && err2 == nil {
-			if !strings.HasPrefix(resolvedPath, resolvedBase) {
+			if !pathContained(resolvedPath, resolvedBase) {
 				e.WarningNews(fmt.Sprintf("Security: Path '%s' for app '%s' resolves outside of its base '%s'. Skipping.", pathStr, app, basePath))
 				return
 			}
