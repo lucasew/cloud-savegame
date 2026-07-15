@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,7 +93,11 @@ func (c *Config) GetPaths(section, key string) []string {
 // expandPath expands the leading tilde (~) to the user's home directory.
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
-		dirname, _ := os.UserHomeDir()
+		dirname, err := os.UserHomeDir()
+		if err != nil {
+			slog.Warn("failed to get user home dir", "error", err)
+			return path
+		}
 		return filepath.Join(dirname, path[2:])
 	}
 	return path

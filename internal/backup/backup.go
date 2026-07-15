@@ -34,7 +34,11 @@ type Engine struct {
 // It initializes the engine with the provided configuration, git wrapper, rules loader, and output directory.
 // It also sets the default MaxDepth to 10 and captures the current hostname.
 func NewEngine(cfg *config.Config, g *git.Wrapper, rl *rules.Loader, outputDir string) *Engine {
-	hostname, _ := os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		slog.Warn("failed to get hostname", "error", err)
+		hostname = "unknown_host"
+	}
 	return &Engine{
 		Cfg:         cfg,
 		Git:         g,

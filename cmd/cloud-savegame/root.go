@@ -82,7 +82,11 @@ func run(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	outPath, _ := filepath.Abs(outputDir)
+	outPath, err := filepath.Abs(outputDir)
+	if err != nil {
+		slog.Error("failed to get absolute path for output dir", "error", err)
+		os.Exit(1)
+	}
 	if _, err := os.Stat(outPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(outPath, 0755); err != nil {
 			slog.Error("Failed to create output dir", "error", err)
