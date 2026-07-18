@@ -105,13 +105,15 @@ func run(cmd *cobra.Command, args []string) {
 	var g *git.Wrapper
 	if useGit {
 		g = git.New(outPath) // Git operations in output dir
-		if _, err := os.Stat(filepath.Join(outPath, ".git")); os.IsNotExist(err) {
-			if err := g.Init(cmd.Context(), "master"); err != nil {
-				slog.Error("git init failed", "error", err)
-			}
+		// Init is a no-op when .git already exists; it also surfaces Stat
+		// failures other than IsNotExist (e.g. permission errors).
+		if err := g.Init(cmd.Context(), "master"); err != nil {
+			slog.Error("git init failed", "error", err)
 		}
-		dirty, _ := g.IsRepoDirty(cmd.Context())
-		if dirty {
+		dirty, err := g.IsRepoDirty(cmd.Context())
+		if err != nil {
+			slog.Warn("git status failed before run; skipping dirty-repo cleanup", "error", err)
+		} else if dirty {
 			host, err := os.Hostname()
 			if err != nil {
 				host = "unknown_host"

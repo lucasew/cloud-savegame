@@ -293,8 +293,10 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 
 			// Git commit per file/ingest
 			if e.Git != nil {
-				isDirty, _ := e.Git.IsRepoDirty(ctx)
-				if isDirty {
+				isDirty, err := e.Git.IsRepoDirty(ctx)
+				if err != nil {
+					slog.Error("git status failed; skipping commit for ingest", "path", pathStr, "error", err)
+				} else if isDirty {
 					commitMsg := fmt.Sprintf("hostname=%s app=%s rule=%s path=%s", e.Hostname, app, ruleName, pathStr)
 					if err := e.Git.Exec(ctx, "add", "-A"); err != nil {
 						slog.Error("git add failed", "error", err)
