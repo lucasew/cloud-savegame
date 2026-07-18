@@ -81,9 +81,8 @@ There is a simple layer of "typing" over INI primitives.
 
 As you may have deduced, the automatic search system only looks
 for home directories. Our definition of home directory is a directory
-that has any of the items defined in the top level variable
-`HOMEFINDER_FIND_FOLDERS` (currently `.config` and `AppData`). That's it. If it has any of these items
-then it's in.
+that contains either a `.config` or an `AppData` subdirectory. That's it.
+If it has any of these items then it's in.
 
 ### App specific sections
 
@@ -108,10 +107,19 @@ We use `filepath` which handles cross-platform path separators.
 
 - `$documents`: The documents folder in a home folder. This may not catch
   your documents folder depending on which language you have set on your PC.
-- `$appdata`: The ~/AppData folder in a home folder. In Windows it's hidden by default.
+  The tool looks for both `Documents` and `Documentos`.
+- `$appdata`: The `AppData` folder under a home directory. On Windows it is
+  hidden by default.
 - `$home`: The home folder itself.
 - `$installdir`: The folder where the app is installed. All apps that use this must
-  have installdir specified in the configuration file for the rule to work.
+  have `installdir` specified in the configuration file for the rule to work.
+- `$program_files`: Candidate Program Files directories found near discovered homes
+  (directories next to the home parent that contain a `Common Files` folder).
+- `$ubisoft`: Per-user Ubisoft savegame directory under
+  `Program Files/Ubisoft/Ubisoft Game Launcher/savegames/<user>`.
+
+Any other `$name` placeholder in a rule file is ignored at expansion time (a
+warning is logged when the rule is parsed).
 
 ## FAQ
 

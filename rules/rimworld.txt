@@ -7,5 +7,4 @@ config $appdata/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Config
 scenarios $home/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Scenarios
 scenarios $appdata/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Scenarios
 
-mods $steamapps/common/Rimworld/Mods
 mods $installdir/Mods
