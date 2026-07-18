@@ -148,9 +148,15 @@ func run(cmd *cobra.Command, args []string) {
 	eng.MaxDepth = maxDepth
 	eng.IgnoredPaths = cfg.GetPaths("search", "ignore")
 
-	// Pre-load variable usage
-	varUsers := make(map[string][]string) // var -> []apps
-	allApps, _ := rl.GetApps()
+	// Pre-load variable usage: var name -> unique apps that reference it.
+	// Apps must appear once per variable even when many rules share e.g. $documents;
+	// processAppRules re-walks every rule for that app, so duplicates scale as O(n²).
+	varUsers := make(map[string][]string)
+	allApps, err := rl.GetApps()
+	if err != nil {
+		slog.Error("failed to discover apps from rules", "error", err)
+		// Continue with whatever apps were returned (partial discovery).
+	}
 
 	// Parse all rules to find variable usage
 	for app, rf := range allApps {
@@ -164,7 +170,7 @@ func run(cmd *cobra.Command, args []string) {
 			for _, m := range matches {
 				if len(m) > 1 {
 					v := m[1]
-					varUsers[v] = append(varUsers[v], app)
+					varUsers[v] = appendUnique(varUsers[v], app)
 				}
 			}
 			if len(matches) == 0 {
@@ -352,4 +358,14 @@ func processAppRules(ctx context.Context, eng *backup.Engine, rl *rules.Loader, 
 			eng.IngestPath(ctx, app, r.Name, resolved, true, varValue)
 		}
 	}
+}
+
+// appendUnique appends s to list if it is not already present (order-preserving).
+func appendUnique(list []string, s string) []string {
+	for _, x := range list {
+		if x == s {
+			return list
+		}
+	}
+	return append(list, s)
 }
