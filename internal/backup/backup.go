@@ -121,16 +121,22 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 		return // doesn't exist or error
 	}
 
-	// Loop detection
-	absInput, err1 := filepath.Abs(inputItem)
-	absOutput, err2 := filepath.Abs(outputDir)
-	if err1 == nil && err2 == nil {
-		if pathContained(absInput, absOutput) {
-			slog.Warn("copy_item: Not copying: Origin is inside output", "path", inputItem)
-			return
-		}
-	} else {
-		slog.Warn("failed to resolve absolute paths for loop detection", "input", inputItem, "output", outputDir)
+	// Loop detection — fail closed if paths cannot be resolved.
+	absInput, err := filepath.Abs(inputItem)
+	if err != nil {
+		slog.Warn("copy_item: skipping; cannot resolve absolute path for loop detection",
+			"path", inputItem, "error", err)
+		return
+	}
+	absOutput, err := filepath.Abs(outputDir)
+	if err != nil {
+		slog.Warn("copy_item: skipping; cannot resolve absolute output path for loop detection",
+			"output", outputDir, "error", err)
+		return
+	}
+	if pathContained(absInput, absOutput) {
+		slog.Warn("copy_item: Not copying: Origin is inside output", "path", inputItem)
+		return
 	}
 
 	// Symlink check
@@ -221,19 +227,24 @@ func copyFile(src, dst string) error {
 // If enabled (`e.Backlink`), it replaces the original file with a symlink to the backup location.
 // Before creating the symlink, it backs up the original file to avoid data loss.
 func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, topLevel bool, basePath string) {
-	// Security: base_path check
+	// Security: base_path check — fail closed if paths cannot be resolved.
 	if basePath != "" {
 		resolvedPath, err := filepath.Abs(pathStr)
-		resolvedBase, err2 := filepath.Abs(basePath)
-		if err == nil && err2 == nil {
-			if !pathContained(resolvedPath, resolvedBase) {
-				e.WarningNews(fmt.Sprintf("Security: Path '%s' for app '%s' resolves outside of its base '%s'. Skipping.", pathStr, app, basePath))
-				return
-			}
+		if err != nil {
+			e.WarningNews(fmt.Sprintf("Security: cannot resolve path '%s' for app '%s' (%v). Skipping.", pathStr, app, err))
+			return
+		}
+		resolvedBase, err := filepath.Abs(basePath)
+		if err != nil {
+			e.WarningNews(fmt.Sprintf("Security: cannot resolve base '%s' for app '%s' (%v). Skipping.", basePath, app, err))
+			return
+		}
+		if !pathContained(resolvedPath, resolvedBase) {
+			e.WarningNews(fmt.Sprintf("Security: Path '%s' for app '%s' resolves outside of its base '%s'. Skipping.", pathStr, app, basePath))
+			return
 		}
 	} else {
-		// No base path: disallow absolute paths unless they are globs?
-		// Python: elif "*" not in path and Path(path).is_absolute():
+		// No base path: disallow absolute paths unless they are globs.
 		if !strings.Contains(pathStr, "*") && filepath.IsAbs(pathStr) {
 			e.WarningNews(fmt.Sprintf("Security: Absolute path '%s' for app '%s' is not allowed in rules. Skipping.", pathStr, app))
 			return
