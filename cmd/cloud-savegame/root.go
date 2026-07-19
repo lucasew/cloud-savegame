@@ -198,8 +198,11 @@ func run(cmd *cobra.Command, args []string) {
 		}
 
 		for _, installDir := range installDirs {
-			if _, err := os.Stat(installDir); os.IsNotExist(err) {
-				eng.WarningNews(fmt.Sprintf("Game install dir for %s doesn't exist: %s", app, installDir))
+			if _, err := os.Stat(installDir); err != nil {
+				// Any Stat failure must skip: previously only IsNotExist continued,
+				// so permission / other errors still ran processAppRules.
+				eng.WarningNews(pathStatProblem(
+					fmt.Sprintf("Game install dir for %s", app), installDir, err))
 				continue
 			}
 			if eng.IsPathIgnored(installDir) {
@@ -213,13 +216,15 @@ func run(cmd *cobra.Command, args []string) {
 	extraHomes := cfg.GetPaths("search", "extra_homes")
 	var homes []string
 	for _, h := range extraHomes {
-		if !eng.IsPathIgnored(h) {
-			if _, err := os.Stat(h); err == nil {
-				homes = append(homes, h)
-			} else {
-				eng.WarningNews(fmt.Sprintf("extra home '%s' does not exist", h))
-			}
+		if eng.IsPathIgnored(h) {
+			continue
 		}
+		if _, err := os.Stat(h); err != nil {
+			// Distinguish missing vs other Stat errors (e.g. permission denied).
+			eng.WarningNews(pathStatProblem("extra home", h, err))
+			continue
+		}
+		homes = append(homes, h)
 	}
 
 	searchPaths := cfg.GetPaths("search", "paths")
@@ -374,4 +379,13 @@ func appendUnique(list []string, s string) []string {
 		}
 	}
 	return append(list, s)
+}
+
+// pathStatProblem formats a warning for a failed os.Stat on a configured path.
+// Callers must only pass a non-nil err from Stat (or equivalent).
+func pathStatProblem(label, path string, err error) string {
+	if os.IsNotExist(err) {
+		return fmt.Sprintf("%s does not exist: %s", label, path)
+	}
+	return fmt.Sprintf("%s is inaccessible: %s: %v", label, path, err)
 }
