@@ -80,3 +80,43 @@ bool=true
 		t.Errorf("GetPaths: Path is not absolute: %s", paths[0])
 	}
 }
+
+// TestGetPathsSkipsWhenAbsFails covers the rare case where filepath.Abs cannot
+// resolve (deleted working directory). Entries must be dropped rather than
+// returned unresolved, and must not panic.
+func TestGetPathsSkipsWhenAbsFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.cfg")
+	if err := os.WriteFile(path, []byte("[test]\npath=relative/entry\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.New()
+	if err := cfg.Load(path); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	// Work inside a directory we remove so relative Abs fails.
+	work := filepath.Join(tmpDir, "work")
+	if err := os.Mkdir(work, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
+	if err := os.Remove(work); err != nil {
+		t.Fatal(err)
+	}
+
+	paths := cfg.GetPaths("test", "path")
+	if len(paths) != 0 {
+		t.Fatalf("GetPaths: expected empty result when Abs fails, got %#v", paths)
+	}
+}
