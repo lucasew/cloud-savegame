@@ -76,15 +76,20 @@ func (c *Config) GetList(section, key string) []string {
 
 // GetPaths retrieves a list of paths from a key, performing expansion and absolute path resolution.
 // It expands home directory usage (~) and converts relative paths to absolute ones.
+// Entries that fail absolute resolution are skipped with a warning so misconfiguration
+// (or rare Abs failures) is not silent.
 func (c *Config) GetPaths(section, key string) []string {
 	list := c.GetList(section, key)
 	var result []string
 	for _, p := range list {
 		expanded := expandPath(p)
 		abs, err := filepath.Abs(expanded)
-		if err == nil {
-			result = append(result, abs)
+		if err != nil {
+			slog.Warn("failed to resolve absolute path; skipping entry",
+				"section", section, "key", key, "path", expanded, "error", err)
+			continue
 		}
+		result = append(result, abs)
 	}
 	return result
 }
