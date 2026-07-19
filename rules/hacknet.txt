@@ -1,1 +1,2 @@
 saves $documents/My Games/Hacknet/Accounts/
+saves $home/.local/share/Hacknet/Accounts/
