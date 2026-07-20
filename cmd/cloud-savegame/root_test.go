@@ -54,14 +54,15 @@ func TestPathStatProblemInaccessible(t *testing.T) {
 	// Synthetic non-IsNotExist error (permission-style) must not use the
 	// "does not exist" wording and must keep the path skipped by callers.
 	err := errors.New("permission denied")
-	msg := pathStatProblem("extra home", "/secret/home", err)
+	secretHome := filepath.Join(t.TempDir(), "secret-home")
+	msg := pathStatProblem("extra home", secretHome, err)
 	if strings.Contains(msg, "does not exist") {
 		t.Fatalf("inaccessible path must not look missing: %q", msg)
 	}
 	if !strings.Contains(msg, "inaccessible") {
 		t.Fatalf("message = %q, want inaccessible", msg)
 	}
-	if !strings.Contains(msg, "/secret/home") {
+	if !strings.Contains(msg, secretHome) {
 		t.Fatalf("message should include path: %q", msg)
 	}
 	if !strings.Contains(msg, "permission denied") {
