@@ -268,28 +268,27 @@ func run(cmd *cobra.Command, args []string) {
 					// Ubisoft Logic
 					ubiDir := filepath.Join(pfCandidate, "Ubisoft", "Ubisoft Game Launcher", "savegames")
 					if _, err := os.Stat(ubiDir); err == nil {
-						ubiUsers, _ := os.ReadDir(ubiDir)
-						var ubiUserList []string
-						for _, u := range ubiUsers {
-							if u.IsDir() {
-								ubiUserList = append(ubiUserList, u.Name())
+						ubiUserList, err := listSubdirNames(ubiDir)
+						if err != nil {
+							// Previously ReadDir errors were discarded: no users, no
+							// warning, and Ubisoft rules silently did nothing.
+							eng.WarningNews(pathStatProblem("Ubisoft savegames dir", ubiDir, err))
+						} else {
+							// Write users.txt
+							ubiMetaDir := filepath.Join(outPath, "ubisoft")
+							if err := os.MkdirAll(ubiMetaDir, 0755); err != nil {
+								slog.Error("failed to create ubisoft meta dir", "error", err)
 							}
-						}
+							if err := os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644); err != nil {
+								slog.Error("failed to write ubisoft users", "error", err)
+							}
 
-						// Write users.txt
-						ubiMetaDir := filepath.Join(outPath, "ubisoft")
-						if err := os.MkdirAll(ubiMetaDir, 0755); err != nil {
-							slog.Error("failed to create ubisoft meta dir", "error", err)
-						}
-						if err := os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644); err != nil {
-							slog.Error("failed to write ubisoft users", "error", err)
-						}
-
-						// Process ubisoft
-						for _, uUser := range ubiUserList {
-							ubiVar := filepath.Join(ubiDir, uUser)
-							for _, app := range varUsers["ubisoft"] {
-								processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$ubisoft", ubiVar)
+							// Process ubisoft
+							for _, uUser := range ubiUserList {
+								ubiVar := filepath.Join(ubiDir, uUser)
+								for _, app := range varUsers["ubisoft"] {
+									processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$ubisoft", ubiVar)
+								}
 							}
 						}
 					}
@@ -388,4 +387,20 @@ func pathStatProblem(label, path string, err error) string {
 		return fmt.Sprintf("%s does not exist: %s", label, path)
 	}
 	return fmt.Sprintf("%s is inaccessible: %s: %v", label, path, err)
+}
+
+// listSubdirNames returns the names of immediate child directories under dir.
+// Callers must handle the error: a failed ReadDir must not look like "no users".
+func listSubdirNames(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	return names, nil
 }
