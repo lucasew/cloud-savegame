@@ -1,1 +1,2 @@
 saves $appdata/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles
+saves $home/.local/share/Larian Studios/Baldur's Gate 3/PlayerProfiles
