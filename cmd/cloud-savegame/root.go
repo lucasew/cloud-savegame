@@ -255,7 +255,11 @@ func run(cmd *cobra.Command, args []string) {
 		grandparent := filepath.Dir(parent)
 
 		entries, err := os.ReadDir(grandparent)
-		if err == nil {
+		if err != nil {
+			// Previously ReadDir errors were discarded: Program Files and
+			// Ubisoft discovery for this home were skipped with no warning.
+			eng.WarningNews(pathStatProblem("Program Files parent dir", grandparent, err))
+		} else {
 			for _, entry := range entries {
 				pfCandidate := filepath.Join(grandparent, entry.Name())
 				if _, err := os.Stat(filepath.Join(pfCandidate, "Common Files")); err == nil {
