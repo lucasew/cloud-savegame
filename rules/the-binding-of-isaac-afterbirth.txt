@@ -1,3 +1,6 @@
 options $documents/My Games/Binding of Isaac Afterbirth/options.ini
+options $home/.local/share/binding of isaac afterbirth/options.ini
 inputconfigs $documents/My Games/Binding of Isaac Afterbirth/inputconfigs.dat
+inputconfigs $home/.local/share/binding of isaac afterbirth/inputconfigs.dat
 saves $documents/My Games/Binding of Isaac Afterbirth/*.ab_persistentgamedata*
+saves $home/.local/share/binding of isaac afterbirth/*.ab_persistentgamedata*
