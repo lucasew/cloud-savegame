@@ -3,6 +3,7 @@ package git_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lucasew/cloud-savegame/internal/git"
@@ -119,5 +120,46 @@ func TestInitPropagatesStatPermissionError(t *testing.T) {
 	err := g.Init(t.Context(), "main")
 	if err == nil {
 		t.Fatal("expected permission error from Stat of .git under unreadable dir")
+	}
+}
+
+func TestExecErrorIncludesCommandOutput(t *testing.T) {
+	dir := t.TempDir()
+	g := requireGit(t, dir)
+	// Unknown subcommand fails with a message on stderr; callers must see it.
+	err := g.Exec(t.Context(), "this-is-not-a-git-subcommand")
+	if err == nil {
+		t.Fatal("expected error for invalid git subcommand")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "this-is-not-a-git-subcommand") {
+		t.Fatalf("error should mention the failed args, got: %v", err)
+	}
+	// Git prints "is not a git command" (or similar).
+	if !strings.Contains(strings.ToLower(msg), "not a git command") &&
+		!strings.Contains(strings.ToLower(msg), "unknown") {
+		t.Fatalf("error should include git command output, got: %v", err)
+	}
+}
+
+func TestCommitErrorIncludesCommandOutput(t *testing.T) {
+	dir := t.TempDir()
+	g := requireGit(t, dir)
+	ctx := t.Context()
+	if err := g.Init(ctx, "main"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	configureIdentity(t, g)
+
+	// Empty index: commit fails; git writes the reason to stdout/stderr.
+	err := g.Commit(ctx, "empty commit should fail")
+	if err == nil {
+		t.Fatal("expected error when committing with nothing staged")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "nothing to commit") &&
+		!strings.Contains(msg, "no changes") &&
+		!strings.Contains(msg, "did not match any file") {
+		t.Fatalf("error should include git commit output, got: %v", err)
 	}
 }
