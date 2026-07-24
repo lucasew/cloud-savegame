@@ -94,15 +94,24 @@ func (c *Config) GetPaths(section, key string) []string {
 	return result
 }
 
-// expandPath expands the leading tilde (~) to the user's home directory.
+// expandPath expands a leading tilde to the user's home directory.
+// Handles bare "~" (as in demo.cfg search.paths) and "~/..." / "~\..." forms.
+// Other-user paths like "~name" are left unchanged.
 func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		dirname, err := os.UserHomeDir()
-		if err != nil {
-			slog.Warn("failed to get user home dir", "error", err)
-			return path
-		}
-		return filepath.Join(dirname, path[2:])
+	if path == "" || path[0] != '~' {
+		return path
 	}
-	return path
+	// Bare "~", or "~" plus a path separator and optional rest.
+	if len(path) > 1 && path[1] != '/' && path[1] != '\\' {
+		return path
+	}
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("failed to get user home dir", "error", err)
+		return path
+	}
+	if len(path) == 1 {
+		return dirname
+	}
+	return filepath.Join(dirname, path[2:])
 }
