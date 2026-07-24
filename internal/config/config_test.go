@@ -81,6 +81,38 @@ bool=true
 	}
 }
 
+// TestGetPathsExpandsBareTilde covers demo.cfg's paths=~ form. Without bare
+// tilde expansion, filepath.Abs("~") becomes $CWD/~ and home search breaks.
+func TestGetPathsExpandsBareTilde(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.cfg")
+	if err := os.WriteFile(path, []byte("[search]\npaths=~\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.New()
+	if err := cfg.Load(path); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	want, err := filepath.Abs(home)
+	if err != nil {
+		t.Fatalf("Abs(home): %v", err)
+	}
+
+	paths := cfg.GetPaths("search", "paths")
+	if len(paths) != 1 {
+		t.Fatalf("GetPaths: expected 1 path, got %#v", paths)
+	}
+	if paths[0] != want {
+		t.Fatalf("GetPaths bare ~: got %q, want home %q", paths[0], want)
+	}
+}
+
 // TestGetPathsSkipsWhenAbsFails covers the rare case where filepath.Abs cannot
 // resolve (deleted working directory). Entries must be dropped rather than
 // returned unresolved, and must not panic.
