@@ -302,7 +302,15 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 
 	} else {
 		// Concrete path
-		if _, err := os.Stat(pathStr); err == nil {
+		if _, err := os.Stat(pathStr); err != nil {
+			// Missing paths are normal (game not installed for this home).
+			// Permission / other Stat failures must not look like "nothing to do".
+			if !os.IsNotExist(err) {
+				e.WarningNews(fmt.Sprintf(
+					"Path for app '%s' rule '%s' is inaccessible: %s: %v",
+					app, ruleName, pathStr, err))
+			}
+		} else {
 			slog.Info("ingest", "path", pathStr, "output", outputDir)
 			e.CopyItem(pathStr, outputDir, e.OutputDir, 0)
 
