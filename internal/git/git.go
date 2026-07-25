@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -38,7 +39,10 @@ func (g *Wrapper) Available() bool {
 }
 
 // Exec executes a Git command with the provided arguments.
-// It streams stdout and stderr to the parent process's outputs.
+// It streams stdout and stderr to the parent process's outputs, and on
+// failure includes captured command output in the returned error so slog
+// callers do not only see a bare exit status (git often prints details on
+// stdout, e.g. "nothing to commit").
 func (g *Wrapper) Exec(ctx context.Context, args ...string) error {
 	if !g.Available() {
 		return nil
@@ -46,9 +50,13 @@ func (g *Wrapper) Exec(ctx context.Context, args ...string) error {
 	slog.Info("git", "args", args)
 	cmd := exec.CommandContext(ctx, g.gitBin, args...)
 	cmd.Dir = g.dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	var capBuf bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &capBuf)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &capBuf)
+	if err := cmd.Run(); err != nil {
+		return wrapGitErr(fmt.Sprintf("git %s", strings.Join(args, " ")), err, capBuf.String())
+	}
+	return nil
 }
 
 // IsRepoDirty checks if there are any uncommitted changes in the repository.
@@ -63,11 +71,7 @@ func (g *Wrapper) IsRepoDirty(ctx context.Context) (bool, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errBuf.String())
-		if msg != "" {
-			return false, fmt.Errorf("git status: %w: %s", err, msg)
-		}
-		return false, fmt.Errorf("git status: %w", err)
+		return false, wrapGitErr("git status", err, errBuf.String())
 	}
 	return out.Len() > 0, nil
 }
@@ -96,6 +100,7 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 // Commit creates a new commit with the specified message.
 // It passes the commit message via stdin using '--file=-' to avoid shell
 // escaping issues and command-line length limits.
+// On failure, captured command output is included in the returned error.
 func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	if !g.Available() {
 		return nil
@@ -103,9 +108,22 @@ func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	cmd := exec.CommandContext(ctx, g.gitBin, "commit", "--file=-")
 	cmd.Dir = g.dir
 	cmd.Stdin = strings.NewReader(message)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	var capBuf bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &capBuf)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &capBuf)
 	// Log flags only; omit the message body to avoid leaking sensitive content.
 	slog.Info("git", "args", []string{"commit", "--file=-"})
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return wrapGitErr("git commit", err, capBuf.String())
+	}
+	return nil
+}
+
+// wrapGitErr annotates a git command failure with optional captured output.
+func wrapGitErr(op string, err error, output string) error {
+	msg := strings.TrimSpace(output)
+	if msg != "" {
+		return fmt.Errorf("%s: %w: %s", op, err, msg)
+	}
+	return fmt.Errorf("%s: %w", op, err)
 }
