@@ -94,4 +94,33 @@ func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
 	}
 }
 
+// TestCopyItemSurfacesReadDirErrors checks that a directory whose contents
+// cannot be listed produces WarningNews instead of a silent partial copy.
+func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
+	srcRoot := t.TempDir()
+	blocked := filepath.Join(srcRoot, "blocked")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
 
+	// If we can still read the dir (e.g. running as root), skip.
+	if _, err := os.ReadDir(blocked); err == nil {
+		t.Skip("directory is readable; cannot exercise ReadDir failure")
+	}
+
+	outDir := t.TempDir()
+	dest := filepath.Join(outDir, "app", "rule")
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(blocked, dest, outDir, 0)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when CopyItem cannot ReadDir source")
+	}
+	if !strings.Contains(eng.NewsList[0], "Failed to list directory") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+	if !strings.Contains(eng.NewsList[0], blocked) {
+		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
+	}
+}
