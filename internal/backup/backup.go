@@ -152,6 +152,10 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 		}
 		entries, err := os.ReadDir(inputItem)
 		if err != nil {
+			// Previously ReadDir errors were discarded: a permission or other
+			// failure mid-tree left a partial destination with no log/news.
+			slog.Error("failed to readdir for copy", "path", inputItem, "error", err)
+			e.WarningNews(fmt.Sprintf("Failed to list directory while copying '%s': %v", inputItem, err))
 			return
 		}
 		for _, entry := range entries {
