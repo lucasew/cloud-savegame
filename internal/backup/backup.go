@@ -397,10 +397,15 @@ func (e *Engine) SearchForHomes(startDir string, maxDepth int) []string {
 
 	// Recurse
 	entries, err := os.ReadDir(startDir)
-	if err == nil {
-		for _, entry := range entries {
-			homes = append(homes, e.SearchForHomes(filepath.Join(startDir, entry.Name()), maxDepth-1)...)
-		}
+	if err != nil {
+		// Previously ReadDir errors were discarded: a permission or other
+		// failure looked like "no child homes" with no log/news.
+		slog.Error("failed to readdir while searching for homes", "path", startDir, "error", err)
+		e.WarningNews(fmt.Sprintf("Failed to list directory while searching for homes under '%s': %v", startDir, err))
+		return homes
+	}
+	for _, entry := range entries {
+		homes = append(homes, e.SearchForHomes(filepath.Join(startDir, entry.Name()), maxDepth-1)...)
 	}
 	return homes
 }
