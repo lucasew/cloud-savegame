@@ -5,11 +5,34 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/lucasew/cloud-savegame/internal/config"
 )
+
+// isSafePathElement reports whether name is a single path component safe to
+// join under the backup output directory. Rule app names and rule names are
+// used as filepath.Join segments; values like ".." or "foo/bar" would escape
+// the output tree (custom __rules__ are user-controlled).
+func isSafePathElement(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	// Reject separators on every OS (filepath.Base alone leaves backslash
+	// components intact on Unix).
+	if strings.ContainsAny(name, `/\`) {
+		return false
+	}
+	if filepath.Base(name) != name {
+		return false
+	}
+	if filepath.Clean(name) != name {
+		return false
+	}
+	return true
+}
 
 // supportedPathVars are placeholders the CLI expands while scanning.
 // Keep in sync with the variable loops in cmd/cloud-savegame.
@@ -60,6 +83,11 @@ func (l *Loader) GetApps() (map[string]RuleFile, error) {
 			}
 			if !d.IsDir() && strings.HasSuffix(d.Name(), ".txt") {
 				appName := strings.TrimSuffix(d.Name(), ".txt")
+				if !isSafePathElement(appName) {
+					slog.Warn("skipping rule file with unsafe app name",
+						"file", path, "app", appName)
+					return nil
+				}
 				apps[appName] = RuleFile{FS: fsys, Path: path}
 			}
 			return nil
@@ -105,6 +133,12 @@ func (l *Loader) ParseRules(appName string, rf RuleFile) ([]Rule, error) {
 		rulePath := strings.TrimSpace(parts[1])
 		if ruleName == "" || rulePath == "" {
 			slog.Warn("skipping rule with empty name or path", "app", appName, "file", rf.Path, "line", lineNo, "text", line)
+			continue
+		}
+		if !isSafePathElement(ruleName) {
+			// Fail closed: rule names become output subdirs; path elements
+			// like ".." or "a/b" escape the backup tree via filepath.Join.
+			slog.Warn("skipping rule with unsafe name", "app", appName, "file", rf.Path, "line", lineNo, "name", ruleName)
 			continue
 		}
 
