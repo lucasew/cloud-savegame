@@ -116,6 +116,51 @@ func TestParseRulesSkipsMalformedAndKeepsUnsupportedVars(t *testing.T) {
 	}
 }
 
+func TestGetAppsSkipsUnsafeAppNames(t *testing.T) {
+	// Basename "...txt" → app ".." which filepath.Join would treat as parent.
+	// Basename ".txt" → empty app name.
+	fsys := fstest.MapFS{
+		"...txt":     &fstest.MapFile{Data: []byte("saves $home/x\n")},
+		".txt":       &fstest.MapFile{Data: []byte("saves $home/x\n")},
+		"safe-game.txt": &fstest.MapFile{Data: []byte("saves $home/x\n")},
+	}
+	loader := rules.NewLoader(config.New(), []fs.FS{fsys})
+	apps, err := loader.GetApps()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(apps) != 1 {
+		t.Fatalf("expected only safe-game, got %#v", apps)
+	}
+	if _, ok := apps["safe-game"]; !ok {
+		t.Fatalf("expected safe-game, got %#v", apps)
+	}
+}
+
+func TestParseRulesSkipsUnsafeRuleNames(t *testing.T) {
+	fsys := fstest.MapFS{
+		"game.txt": &fstest.MapFile{Data: []byte("" +
+			"saves $home/good\n" +
+			".. $home/escape\n" +
+			"foo/bar $home/nested\n" +
+			`foo\bar $home/winsep` + "\n" +
+			". $home/dot\n"),
+		},
+	}
+	loader := rules.NewLoader(config.New(), []fs.FS{fsys})
+	apps, err := loader.GetApps()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := loader.ParseRules("game", apps["game"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r) != 1 || r[0].Name != "saves" || r[0].Path != "$home/good" {
+		t.Fatalf("expected only safe rule, got %#v", r)
+	}
+}
+
 // failFS fails every Open, so fs.WalkDir cannot start.
 type failFS struct{}
 
