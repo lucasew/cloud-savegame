@@ -124,13 +124,13 @@ func (l *Loader) ParseRules(appName string, rf RuleFile) ([]Rule, error) {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) != 2 {
+		ruleName, rulePath, ok := strings.Cut(line, " ")
+		if !ok {
 			slog.Warn("skipping malformed rule line", "app", appName, "file", rf.Path, "line", lineNo, "text", line)
 			continue
 		}
-		ruleName := strings.TrimSpace(parts[0])
-		rulePath := strings.TrimSpace(parts[1])
+		ruleName = strings.TrimSpace(ruleName)
+		rulePath = strings.TrimSpace(rulePath)
 		if ruleName == "" || rulePath == "" {
 			slog.Warn("skipping rule with empty name or path", "app", appName, "file", rf.Path, "line", lineNo, "text", line)
 			continue
