@@ -61,3 +61,37 @@ func TestIngestPathSecurity(t *testing.T) {
 		}
 	}
 }
+
+// withDeletedCWD runs fn after chdir into a directory that is then removed so
+// filepath.Abs of relative paths fails (Getwd cannot resolve the cwd).
+func withDeletedCWD(t *testing.T, fn func()) {
+	t.Helper()
+	gone := filepath.Join(t.TempDir(), "gone")
+	if err := os.Mkdir(gone, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(gone)
+	if err := os.Remove(gone); err != nil {
+		t.Fatal(err)
+	}
+	fn()
+}
+
+func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
+	// Security checks must not be skipped when filepath.Abs cannot resolve.
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+
+	withDeletedCWD(t, func() {
+		eng.IngestPath(t.Context(), "app", "rule", "relative/path", false, "relative/base")
+	})
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected security warning when path Abs fails")
+	}
+	if !strings.Contains(eng.NewsList[0], "cannot resolve") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+}
+
+
