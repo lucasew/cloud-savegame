@@ -124,3 +124,36 @@ func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
 		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
 	}
 }
+
+// TestSearchForHomesSurfacesReadDirErrors checks that a directory whose
+// contents cannot be listed produces WarningNews instead of looking like
+// "no homes under this path".
+func TestSearchForHomesSurfacesReadDirErrors(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	// If we can still read the dir (e.g. running as root), skip.
+	if _, err := os.ReadDir(blocked); err == nil {
+		t.Skip("directory is readable; cannot exercise ReadDir failure")
+	}
+
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	homes := eng.SearchForHomes(blocked, 3)
+
+	if len(homes) != 0 {
+		t.Fatalf("expected no homes from unreadable dir, got %v", homes)
+	}
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when SearchForHomes cannot ReadDir")
+	}
+	if !strings.Contains(eng.NewsList[0], "searching for homes") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+	if !strings.Contains(eng.NewsList[0], blocked) {
+		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
+	}
+}
