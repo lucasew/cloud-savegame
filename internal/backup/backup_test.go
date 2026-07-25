@@ -125,6 +125,60 @@ func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
 	}
 }
 
+// TestIngestPathSurfacesInaccessibleStat checks that a concrete rule path
+// whose Stat fails for a reason other than NotExist produces WarningNews
+// instead of looking like "game not installed".
+func TestIngestPathSurfacesInaccessibleStat(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	// Child under an unreadable parent: Stat fails with permission (not NotExist).
+	secret := filepath.Join(blocked, "save.dat")
+	if _, err := os.Stat(secret); err == nil {
+		t.Skip("path is stat-able; cannot exercise inaccessible Stat")
+	} else if os.IsNotExist(err) {
+		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
+	}
+
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	// basePath empty would reject absolute pathStr; pass base so security allows it.
+	eng.IngestPath(t.Context(), "test-app", "saves", secret, true, blocked)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when IngestPath cannot Stat rule path")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "inaccessible") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, secret) {
+		t.Fatalf("warning should mention path %s: %s", secret, msg)
+	}
+	if !strings.Contains(msg, "test-app") {
+		t.Fatalf("warning should mention app: %s", msg)
+	}
+}
+
+// TestIngestPathMissingPathIsSilent checks that a missing concrete path
+// (game not installed) does not produce a warning.
+func TestIngestPathMissingPathIsSilent(t *testing.T) {
+	outDir := t.TempDir()
+	base := t.TempDir()
+	missing := filepath.Join(base, "no-such-save")
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.IngestPath(t.Context(), "test-app", "saves", missing, true, base)
+
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "inaccessible") {
+			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
+		}
+	}
+}
+
 // TestSearchForHomesSurfacesReadDirErrors checks that a directory whose
 // contents cannot be listed produces WarningNews instead of looking like
 // "no homes under this path".
