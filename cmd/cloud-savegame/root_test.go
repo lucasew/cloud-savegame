@@ -111,3 +111,23 @@ func TestListSubdirNamesError(t *testing.T) {
 		t.Fatalf("pathStatProblem for ReadDir err = %q", msg)
 	}
 }
+
+func TestPathStatProblemProgramFilesParent(t *testing.T) {
+	t.Parallel()
+	// Program Files discovery uses the same helper when grandparent ReadDir fails.
+	missing := filepath.Join(t.TempDir(), "no-such-drive-root")
+	_, err := os.ReadDir(missing)
+	if err == nil {
+		t.Fatal("expected ReadDir error for missing path")
+	}
+	msg := pathStatProblem("Program Files parent dir", missing, err)
+	if !strings.Contains(msg, "does not exist") && !strings.Contains(msg, "inaccessible") {
+		t.Fatalf("pathStatProblem for Program Files parent = %q", msg)
+	}
+	if !strings.Contains(msg, missing) {
+		t.Fatalf("message should include path: %q", msg)
+	}
+	if !strings.Contains(msg, "Program Files parent dir") {
+		t.Fatalf("message should include label: %q", msg)
+	}
+}
