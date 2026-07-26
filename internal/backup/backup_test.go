@@ -260,3 +260,57 @@ func TestSearchForHomesSurfacesReadDirErrors(t *testing.T) {
 		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
 	}
 }
+
+// TestSearchForHomesSurfacesLstatErrors checks that a search start path whose
+// Lstat fails for a reason other than NotExist produces WarningNews instead
+// of looking like "no homes here".
+func TestSearchForHomesSurfacesLstatErrors(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	// Child under an unreadable parent: Lstat fails with permission (not NotExist).
+	secret := filepath.Join(blocked, "nested-home")
+	if _, err := os.Lstat(secret); err == nil {
+		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
+	} else if os.IsNotExist(err) {
+		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
+	}
+
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	homes := eng.SearchForHomes(secret, 3)
+
+	if len(homes) != 0 {
+		t.Fatalf("expected no homes from inaccessible path, got %v", homes)
+	}
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when SearchForHomes cannot Lstat start path")
+	}
+	if !strings.Contains(eng.NewsList[0], "Failed to access path") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+	if !strings.Contains(eng.NewsList[0], secret) {
+		t.Fatalf("warning should mention path %s: %s", secret, eng.NewsList[0])
+	}
+}
+
+// TestSearchForHomesMissingPathIsSilent checks that a missing start path does
+// not produce a warning (normal when a search root is absent).
+func TestSearchForHomesMissingPathIsSilent(t *testing.T) {
+	outDir := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "no-such-home-root")
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	homes := eng.SearchForHomes(missing, 3)
+
+	if len(homes) != 0 {
+		t.Fatalf("expected no homes from missing path, got %v", homes)
+	}
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "Failed to access path") {
+			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
+		}
+	}
+}
