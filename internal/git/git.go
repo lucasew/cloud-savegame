@@ -3,8 +3,10 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -91,7 +93,7 @@ func (g *Wrapper) Init(ctx context.Context, initialBranch string) error {
 	if err == nil {
 		return nil
 	}
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return g.Exec(ctx, "init", "--initial-branch", initialBranch)

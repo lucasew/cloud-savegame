@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	rootpkg "github.com/lucasew/cloud-savegame"
 	"github.com/lucasew/cloud-savegame/internal/backup"
 	"github.com/lucasew/cloud-savegame/internal/config"
@@ -77,7 +78,7 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if _, err := os.Stat(cfgFile); os.IsNotExist(err) {
+	if _, err := os.Stat(cfgFile); errors.Is(err, fs.ErrNotExist) {
 		slog.Error("Configuration file is not actually a file", "path", cfgFile)
 		os.Exit(1)
 	}
@@ -87,7 +88,7 @@ func run(cmd *cobra.Command, args []string) {
 		slog.Error("failed to get absolute path for output dir", "error", err)
 		os.Exit(1)
 	}
-	if _, err := os.Stat(outPath); os.IsNotExist(err) {
+	if _, err := os.Stat(outPath); errors.Is(err, fs.ErrNotExist) {
 		if err := os.MkdirAll(outPath, 0755); err != nil {
 			slog.Error("Failed to create output dir", "error", err)
 			os.Exit(1)
@@ -266,7 +267,7 @@ func run(cmd *cobra.Command, args []string) {
 				if _, err := os.Stat(commonFiles); err != nil {
 					// Missing Common Files is normal for non-PF siblings.
 					// Permission / other Stat failures must not look like "not Program Files".
-					if !os.IsNotExist(err) {
+					if !errors.Is(err, fs.ErrNotExist) {
 						eng.WarningNews(pathStatProblem("Program Files Common Files probe", commonFiles, err))
 					}
 					continue
@@ -282,7 +283,7 @@ func run(cmd *cobra.Command, args []string) {
 				if _, err := os.Stat(ubiDir); err != nil {
 					// Missing Ubisoft is normal when PF exists without Uplay.
 					// Permission / other Stat failures must not look like "no Ubisoft".
-					if !os.IsNotExist(err) {
+					if !errors.Is(err, fs.ErrNotExist) {
 						eng.WarningNews(pathStatProblem("Ubisoft savegames dir", ubiDir, err))
 					}
 				} else {
@@ -320,7 +321,7 @@ func run(cmd *cobra.Command, args []string) {
 			if _, err := os.Stat(docs); err != nil {
 				// Missing Documentos/Documents is normal for a given locale/home.
 				// Permission / other Stat failures must not look like "no documents dir".
-				if !os.IsNotExist(err) {
+				if !errors.Is(err, fs.ErrNotExist) {
 					eng.WarningNews(pathStatProblem("documents dir", docs, err))
 				}
 				continue
@@ -406,7 +407,7 @@ func appendUnique(list []string, s string) []string {
 // pathStatProblem formats a warning for a failed os.Stat on a configured path.
 // Callers must only pass a non-nil err from Stat (or equivalent).
 func pathStatProblem(label, path string, err error) string {
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return fmt.Sprintf("%s does not exist: %s", label, path)
 	}
 	return fmt.Sprintf("%s is inaccessible: %s: %v", label, path, err)
