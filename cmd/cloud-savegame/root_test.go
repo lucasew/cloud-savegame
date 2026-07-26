@@ -192,3 +192,117 @@ func TestDocumentsProbeStatUnderUnreadableHome(t *testing.T) {
 		t.Fatalf("message should include path: %q", msg)
 	}
 }
+
+func TestValidateConfigFileOK(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "demo.cfg")
+	if err := os.WriteFile(path, []byte("[general]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateConfigFile(path); err != nil {
+		t.Fatalf("validateConfigFile: %v", err)
+	}
+}
+
+func TestValidateConfigFileMissing(t *testing.T) {
+	t.Parallel()
+	missing := filepath.Join(t.TempDir(), "no-such.cfg")
+	err := validateConfigFile(missing)
+	if err == nil {
+		t.Fatal("expected error for missing config")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %v, want does not exist", err)
+	}
+}
+
+func TestValidateConfigFileDirectory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	err := validateConfigFile(dir)
+	if err == nil {
+		t.Fatal("expected error when config path is a directory")
+	}
+	if !strings.Contains(err.Error(), "not a file") {
+		t.Fatalf("error = %v, want not a file", err)
+	}
+}
+
+func TestValidateConfigFileInaccessible(t *testing.T) {
+	t.Parallel()
+	parent := t.TempDir()
+	blocked := filepath.Join(parent, "noaccess")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	cfg := filepath.Join(blocked, "demo.cfg")
+	err := validateConfigFile(cfg)
+	if err == nil {
+		t.Skip("platform allows Stat under mode-000 dir; cannot exercise")
+	}
+	if errors.Is(err, fs.ErrNotExist) || strings.Contains(err.Error(), "does not exist") {
+		t.Skip("platform reports NotExist under mode-000 dir; cannot exercise")
+	}
+	if !strings.Contains(err.Error(), "inaccessible") {
+		t.Fatalf("error = %v, want inaccessible", err)
+	}
+}
+
+func TestEnsureOutputDirCreatesMissing(t *testing.T) {
+	t.Parallel()
+	out := filepath.Join(t.TempDir(), "new-out")
+	if err := ensureOutputDir(out); err != nil {
+		t.Fatalf("ensureOutputDir: %v", err)
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat after create: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory at %s", out)
+	}
+}
+
+func TestEnsureOutputDirExistingDir(t *testing.T) {
+	t.Parallel()
+	out := t.TempDir()
+	if err := ensureOutputDir(out); err != nil {
+		t.Fatalf("ensureOutputDir existing: %v", err)
+	}
+}
+
+func TestEnsureOutputDirRejectsFile(t *testing.T) {
+	t.Parallel()
+	out := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(out, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := ensureOutputDir(out)
+	if err == nil {
+		t.Fatal("expected error when output path is a file")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("error = %v, want not a directory", err)
+	}
+}
+
+func TestEnsureOutputDirInaccessible(t *testing.T) {
+	t.Parallel()
+	parent := t.TempDir()
+	blocked := filepath.Join(parent, "noaccess")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	out := filepath.Join(blocked, "out")
+	err := ensureOutputDir(out)
+	if err == nil {
+		t.Skip("platform allows Stat under mode-000 dir; cannot exercise")
+	}
+	// Create path may fail as inaccessible parent, or Stat as inaccessible.
+	msg := err.Error()
+	if !strings.Contains(msg, "inaccessible") && !strings.Contains(msg, "failed to create") {
+		t.Fatalf("error = %v, want inaccessible or create failure", err)
+	}
+}
