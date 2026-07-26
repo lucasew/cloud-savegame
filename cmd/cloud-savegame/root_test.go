@@ -131,3 +131,63 @@ func TestPathStatProblemProgramFilesParent(t *testing.T) {
 		t.Fatalf("message should include label: %q", msg)
 	}
 }
+
+// TestPathStatProblemHomeDiscoveryProbes checks labels used when Stat fails
+// for documents / Common Files / Ubisoft probes (inaccessible, not missing).
+func TestPathStatProblemHomeDiscoveryProbes(t *testing.T) {
+	t.Parallel()
+	err := errors.New("permission denied")
+	cases := []struct {
+		label string
+		path  string
+	}{
+		{"documents dir", filepath.Join(t.TempDir(), "home", "Documents")},
+		{"Program Files Common Files probe", filepath.Join(t.TempDir(), "PF", "Common Files")},
+		{"Ubisoft savegames dir", filepath.Join(t.TempDir(), "savegames")},
+	}
+	for _, tc := range cases {
+		msg := pathStatProblem(tc.label, tc.path, err)
+		if strings.Contains(msg, "does not exist") {
+			t.Fatalf("%s: inaccessible must not look missing: %q", tc.label, msg)
+		}
+		if !strings.Contains(msg, "inaccessible") {
+			t.Fatalf("%s: message = %q, want inaccessible", tc.label, msg)
+		}
+		if !strings.Contains(msg, tc.path) {
+			t.Fatalf("%s: message should include path: %q", tc.label, msg)
+		}
+		if !strings.Contains(msg, tc.label) {
+			t.Fatalf("%s: message should include label: %q", tc.label, msg)
+		}
+	}
+}
+
+// TestDocumentsProbeStatUnderUnreadableHome documents that Stat of a child under
+// a mode-000 home fails with a non-IsNotExist error (the case WarningNews covers).
+func TestDocumentsProbeStatUnderUnreadableHome(t *testing.T) {
+	t.Parallel()
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.Mkdir(home, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(home, 0o755) })
+
+	docs := filepath.Join(home, "Documents")
+	_, err := os.Stat(docs)
+	if err == nil {
+		t.Skip("platform allows Stat under mode-000 home; cannot exercise")
+	}
+	if os.IsNotExist(err) {
+		t.Skip("platform reports NotExist under mode-000 home; cannot exercise")
+	}
+	msg := pathStatProblem("documents dir", docs, err)
+	if strings.Contains(msg, "does not exist") {
+		t.Fatalf("must not look missing: %q", msg)
+	}
+	if !strings.Contains(msg, "inaccessible") {
+		t.Fatalf("message = %q, want inaccessible", msg)
+	}
+	if !strings.Contains(msg, docs) {
+		t.Fatalf("message should include path: %q", msg)
+	}
+}

@@ -262,37 +262,50 @@ func run(cmd *cobra.Command, args []string) {
 		} else {
 			for _, entry := range entries {
 				pfCandidate := filepath.Join(grandparent, entry.Name())
-				if _, err := os.Stat(filepath.Join(pfCandidate, "Common Files")); err == nil {
-
-					// Process program_files
-					for _, app := range varUsers["program_files"] {
-						processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$program_files", pfCandidate)
+				commonFiles := filepath.Join(pfCandidate, "Common Files")
+				if _, err := os.Stat(commonFiles); err != nil {
+					// Missing Common Files is normal for non-PF siblings.
+					// Permission / other Stat failures must not look like "not Program Files".
+					if !os.IsNotExist(err) {
+						eng.WarningNews(pathStatProblem("Program Files Common Files probe", commonFiles, err))
 					}
+					continue
+				}
 
-					// Ubisoft Logic
-					ubiDir := filepath.Join(pfCandidate, "Ubisoft", "Ubisoft Game Launcher", "savegames")
-					if _, err := os.Stat(ubiDir); err == nil {
-						ubiUserList, err := listSubdirNames(ubiDir)
-						if err != nil {
-							// Previously ReadDir errors were discarded: no users, no
-							// warning, and Ubisoft rules silently did nothing.
-							eng.WarningNews(pathStatProblem("Ubisoft savegames dir", ubiDir, err))
-						} else {
-							// Write users.txt
-							ubiMetaDir := filepath.Join(outPath, "ubisoft")
-							if err := os.MkdirAll(ubiMetaDir, 0755); err != nil {
-								slog.Error("failed to create ubisoft meta dir", "error", err)
-							}
-							if err := os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644); err != nil {
-								slog.Error("failed to write ubisoft users", "error", err)
-							}
+				// Process program_files
+				for _, app := range varUsers["program_files"] {
+					processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$program_files", pfCandidate)
+				}
 
-							// Process ubisoft
-							for _, uUser := range ubiUserList {
-								ubiVar := filepath.Join(ubiDir, uUser)
-								for _, app := range varUsers["ubisoft"] {
-									processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$ubisoft", ubiVar)
-								}
+				// Ubisoft Logic
+				ubiDir := filepath.Join(pfCandidate, "Ubisoft", "Ubisoft Game Launcher", "savegames")
+				if _, err := os.Stat(ubiDir); err != nil {
+					// Missing Ubisoft is normal when PF exists without Uplay.
+					// Permission / other Stat failures must not look like "no Ubisoft".
+					if !os.IsNotExist(err) {
+						eng.WarningNews(pathStatProblem("Ubisoft savegames dir", ubiDir, err))
+					}
+				} else {
+					ubiUserList, err := listSubdirNames(ubiDir)
+					if err != nil {
+						// Previously ReadDir errors were discarded: no users, no
+						// warning, and Ubisoft rules silently did nothing.
+						eng.WarningNews(pathStatProblem("Ubisoft savegames dir", ubiDir, err))
+					} else {
+						// Write users.txt
+						ubiMetaDir := filepath.Join(outPath, "ubisoft")
+						if err := os.MkdirAll(ubiMetaDir, 0755); err != nil {
+							slog.Error("failed to create ubisoft meta dir", "error", err)
+						}
+						if err := os.WriteFile(filepath.Join(ubiMetaDir, "users.txt"), []byte(strings.Join(ubiUserList, "\n")), 0644); err != nil {
+							slog.Error("failed to write ubisoft users", "error", err)
+						}
+
+						// Process ubisoft
+						for _, uUser := range ubiUserList {
+							ubiVar := filepath.Join(ubiDir, uUser)
+							for _, app := range varUsers["ubisoft"] {
+								processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$ubisoft", ubiVar)
 							}
 						}
 					}
@@ -304,10 +317,16 @@ func run(cmd *cobra.Command, args []string) {
 		docCandidates := []string{"Documentos", "Documents"}
 		for _, dc := range docCandidates {
 			docs := filepath.Join(home, dc)
-			if _, err := os.Stat(docs); err == nil {
-				for _, app := range varUsers["documents"] {
-					processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$documents", docs)
+			if _, err := os.Stat(docs); err != nil {
+				// Missing Documentos/Documents is normal for a given locale/home.
+				// Permission / other Stat failures must not look like "no documents dir".
+				if !os.IsNotExist(err) {
+					eng.WarningNews(pathStatProblem("documents dir", docs, err))
 				}
+				continue
+			}
+			for _, app := range varUsers["documents"] {
+				processAppRules(cmd.Context(), eng, rl, app, allApps[app], "$documents", docs)
 			}
 		}
 	}
