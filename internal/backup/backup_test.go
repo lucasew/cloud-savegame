@@ -376,3 +376,46 @@ func TestSearchForHomesMissingMarkersAreSilent(t *testing.T) {
 		}
 	}
 }
+
+// TestCopyItemSurfacesCopyErrors checks that a failed file copy produces
+// WarningNews instead of only a slog line the end-of-run summary would miss.
+func TestCopyItemSurfacesCopyErrors(t *testing.T) {
+	srcDir := t.TempDir()
+	src := filepath.Join(srcDir, "save.dat")
+	if err := os.WriteFile(src, []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := t.TempDir()
+	// Read-only destination directory: Create of the target file fails.
+	roDir := filepath.Join(outDir, "ro")
+	if err := os.Mkdir(roDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+
+	dest := filepath.Join(roDir, "save.dat")
+	// Preflight: Create must actually fail on this platform (not root).
+	if f, err := os.Create(dest); err == nil {
+		_ = f.Close()
+		_ = os.Remove(dest)
+		t.Skip("destination is creatable; cannot exercise copy failure")
+	}
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(src, dest, outDir, 0)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when copyFile fails")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "Failed to copy") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, src) {
+		t.Fatalf("warning should mention source %s: %s", src, msg)
+	}
+	if !strings.Contains(msg, dest) {
+		t.Fatalf("warning should mention dest %s: %s", dest, msg)
+	}
+}

@@ -194,7 +194,12 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 
 		slog.Info("copy_item: Copying", "src", inputItem, "dst", destination)
 		if err := copyFile(inputItem, destination); err != nil {
-			slog.Error("copy failed", "error", err)
+			// Previously only slog.Error: failed copies never appeared in the
+			// end-of-run NewsList, so permission / disk-full errors looked like
+			// a clean backup for that path.
+			slog.Error("copy failed", "src", inputItem, "dst", destination, "error", err)
+			e.WarningNews(fmt.Sprintf(
+				"Failed to copy '%s' to '%s': %v", inputItem, destination, err))
 		}
 	}
 }
