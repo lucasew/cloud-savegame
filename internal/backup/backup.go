@@ -406,14 +406,26 @@ func (e *Engine) SearchForHomes(startDir string, maxDepth int) []string {
 		}
 	}
 
+	// Home marker probes: presence of .config or AppData means "this is a home".
+	// Missing markers are normal for intermediate dirs. Permission / other Stat
+	// failures must not look like "no markers here" (silent false negative).
 	findFolders := []string{".config", "AppData"}
 	found := false
 	for _, f := range findFolders {
-		if _, err := os.Stat(filepath.Join(startDir, f)); err == nil {
-			homes = append(homes, startDir)
-			found = true
-			break
+		marker := filepath.Join(startDir, f)
+		if _, err := os.Stat(marker); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				slog.Error("failed to stat home marker while searching for homes",
+					"path", marker, "error", err)
+				e.WarningNews(fmt.Sprintf(
+					"Failed to access home marker while searching for homes under '%s' (%s): %v",
+					startDir, f, err))
+			}
+			continue
 		}
+		homes = append(homes, startDir)
+		found = true
+		break
 	}
 
 	if found {
