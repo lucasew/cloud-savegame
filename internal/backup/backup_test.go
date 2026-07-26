@@ -94,6 +94,55 @@ func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
 	}
 }
 
+// TestCopyItemSurfacesLstatErrors checks that a source path whose Lstat fails
+// for a reason other than NotExist produces WarningNews instead of looking
+// like "nothing to copy".
+func TestCopyItemSurfacesLstatErrors(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	// Child under an unreadable parent: Lstat fails with permission (not NotExist).
+	secret := filepath.Join(blocked, "save.dat")
+	if _, err := os.Lstat(secret); err == nil {
+		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
+	} else if os.IsNotExist(err) {
+		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
+	}
+
+	outDir := t.TempDir()
+	dest := filepath.Join(outDir, "app", "rule", "save.dat")
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(secret, dest, outDir, 0)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when CopyItem cannot Lstat source")
+	}
+	if !strings.Contains(eng.NewsList[0], "Failed to access path") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+	if !strings.Contains(eng.NewsList[0], secret) {
+		t.Fatalf("warning should mention path %s: %s", secret, eng.NewsList[0])
+	}
+}
+
+// TestCopyItemMissingPathIsSilent checks that a missing source does not warn.
+func TestCopyItemMissingPathIsSilent(t *testing.T) {
+	outDir := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "no-such-file")
+	dest := filepath.Join(outDir, "app", "rule", "file")
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(missing, dest, outDir, 0)
+
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "Failed to access path") {
+			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
+		}
+	}
+}
+
 // TestCopyItemSurfacesReadDirErrors checks that a directory whose contents
 // cannot be listed produces WarningNews instead of a silent partial copy.
 func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
