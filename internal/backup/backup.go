@@ -118,7 +118,13 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 
 	info, err := os.Lstat(inputItem)
 	if err != nil {
-		return // doesn't exist or error
+		// Missing sources are normal during recursive copy (race/deleted child).
+		// Permission and other Lstat failures must not look like "nothing to copy".
+		if !os.IsNotExist(err) {
+			slog.Error("failed to lstat for copy", "path", inputItem, "error", err)
+			e.WarningNews(fmt.Sprintf("Failed to access path while copying '%s': %v", inputItem, err))
+		}
+		return
 	}
 
 	// Loop detection — fail closed if paths cannot be resolved.
