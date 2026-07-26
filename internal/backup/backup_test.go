@@ -316,3 +316,63 @@ func TestSearchForHomesMissingPathIsSilent(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchForHomesSurfacesMarkerStatErrors checks that when .config/AppData
+// cannot be Stat'd for a reason other than NotExist, SearchForHomes surfaces
+// WarningNews instead of treating the dir as "no home markers".
+func TestSearchForHomesSurfacesMarkerStatErrors(t *testing.T) {
+	// Unreadable directory: Lstat of the dir itself succeeds, but Stat of
+	// children (.config / AppData) fails with permission denied.
+	blocked := filepath.Join(t.TempDir(), "blocked-home")
+	if err := os.Mkdir(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	marker := filepath.Join(blocked, ".config")
+	if _, err := os.Stat(marker); err == nil {
+		t.Skip("marker is stat-able; cannot exercise inaccessible marker Stat")
+	} else if errors.Is(err, fs.ErrNotExist) {
+		// Some platforms report NotExist when the parent is unreadable.
+		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
+	}
+
+	outDir := t.TempDir()
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	homes := eng.SearchForHomes(blocked, 1)
+
+	if len(homes) != 0 {
+		t.Fatalf("expected no homes from unreadable dir, got %v", homes)
+	}
+	foundMarkerWarn := false
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "home marker") && strings.Contains(msg, blocked) {
+			foundMarkerWarn = true
+			break
+		}
+	}
+	if !foundMarkerWarn {
+		t.Fatalf("expected WarningNews about home marker under %s; got %v", blocked, eng.NewsList)
+	}
+}
+
+// TestSearchForHomesMissingMarkersAreSilent checks that a readable dir without
+// .config or AppData does not warn about missing home markers.
+func TestSearchForHomesMissingMarkersAreSilent(t *testing.T) {
+	root := t.TempDir()
+	// Intermediate directory with neither marker.
+	mid := filepath.Join(root, "not-a-home")
+	if err := os.Mkdir(mid, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	eng := backup.NewEngine(config.New(), nil, nil, t.TempDir())
+	homes := eng.SearchForHomes(mid, 1)
+	if len(homes) != 0 {
+		t.Fatalf("expected no homes without markers, got %v", homes)
+	}
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "home marker") {
+			t.Fatalf("missing markers must not warn: %s", msg)
+		}
+	}
+}
