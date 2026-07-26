@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/lucasew/cloud-savegame/internal/config"
 	"github.com/lucasew/cloud-savegame/internal/git"
 	"github.com/lucasew/cloud-savegame/internal/rules"
+	"io/fs"
 )
 
 // Engine manages the backup and restore process.
@@ -120,7 +122,7 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	if err != nil {
 		// Missing sources are normal during recursive copy (race/deleted child).
 		// Permission and other Lstat failures must not look like "nothing to copy".
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			slog.Error("failed to lstat for copy", "path", inputItem, "error", err)
 			e.WarningNews(fmt.Sprintf("Failed to access path while copying '%s': %v", inputItem, err))
 		}
@@ -311,7 +313,7 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 		if _, err := os.Stat(pathStr); err != nil {
 			// Missing paths are normal (game not installed for this home).
 			// Permission / other Stat failures must not look like "nothing to do".
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				e.WarningNews(fmt.Sprintf(
 					"Path for app '%s' rule '%s' is inaccessible: %s: %v",
 					app, ruleName, pathStr, err))
@@ -386,7 +388,7 @@ func (e *Engine) SearchForHomes(startDir string, maxDepth int) []string {
 	if err != nil {
 		// Missing paths are normal while walking (race/deleted child).
 		// Permission and other Lstat failures must not look like "no homes here".
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			slog.Error("failed to lstat while searching for homes", "path", startDir, "error", err)
 			e.WarningNews(fmt.Sprintf("Failed to access path while searching for homes under '%s': %v", startDir, err))
 		}

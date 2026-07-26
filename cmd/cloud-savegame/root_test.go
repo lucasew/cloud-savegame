@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,7 +178,7 @@ func TestDocumentsProbeStatUnderUnreadableHome(t *testing.T) {
 	if err == nil {
 		t.Skip("platform allows Stat under mode-000 home; cannot exercise")
 	}
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		t.Skip("platform reports NotExist under mode-000 home; cannot exercise")
 	}
 	msg := pathStatProblem("documents dir", docs, err)

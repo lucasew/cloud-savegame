@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"errors"
 	"github.com/lucasew/cloud-savegame/internal/backup"
 	"github.com/lucasew/cloud-savegame/internal/config"
+	"io/fs"
 )
 
 func TestIsPathIgnored(t *testing.T) {
@@ -108,7 +110,7 @@ func TestCopyItemSurfacesLstatErrors(t *testing.T) {
 	secret := filepath.Join(blocked, "save.dat")
 	if _, err := os.Lstat(secret); err == nil {
 		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
-	} else if os.IsNotExist(err) {
+	} else if errors.Is(err, fs.ErrNotExist) {
 		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
 	}
 
@@ -188,7 +190,7 @@ func TestIngestPathSurfacesInaccessibleStat(t *testing.T) {
 	secret := filepath.Join(blocked, "save.dat")
 	if _, err := os.Stat(secret); err == nil {
 		t.Skip("path is stat-able; cannot exercise inaccessible Stat")
-	} else if os.IsNotExist(err) {
+	} else if errors.Is(err, fs.ErrNotExist) {
 		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
 	}
 
@@ -275,7 +277,7 @@ func TestSearchForHomesSurfacesLstatErrors(t *testing.T) {
 	secret := filepath.Join(blocked, "nested-home")
 	if _, err := os.Lstat(secret); err == nil {
 		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
-	} else if os.IsNotExist(err) {
+	} else if errors.Is(err, fs.ErrNotExist) {
 		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
 	}
 
