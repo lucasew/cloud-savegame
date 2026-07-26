@@ -383,7 +383,16 @@ func (e *Engine) SearchForHomes(startDir string, maxDepth int) []string {
 	}
 
 	info, err := os.Lstat(startDir)
-	if err != nil || !info.IsDir() || (info.Mode()&os.ModeSymlink != 0) {
+	if err != nil {
+		// Missing paths are normal while walking (race/deleted child).
+		// Permission and other Lstat failures must not look like "no homes here".
+		if !os.IsNotExist(err) {
+			slog.Error("failed to lstat while searching for homes", "path", startDir, "error", err)
+			e.WarningNews(fmt.Sprintf("Failed to access path while searching for homes under '%s': %v", startDir, err))
+		}
+		return nil
+	}
+	if !info.IsDir() || (info.Mode()&os.ModeSymlink != 0) {
 		return nil
 	}
 
