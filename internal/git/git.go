@@ -52,13 +52,7 @@ func (g *Wrapper) Exec(ctx context.Context, args ...string) error {
 	slog.Info("git", "args", args)
 	cmd := exec.CommandContext(ctx, g.gitBin, args...)
 	cmd.Dir = g.dir
-	var capBuf bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &capBuf)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &capBuf)
-	if err := cmd.Run(); err != nil {
-		return wrapGitErr(fmt.Sprintf("git %s", strings.Join(args, " ")), err, capBuf.String())
-	}
-	return nil
+	return runWithCapture(cmd, fmt.Sprintf("git %s", strings.Join(args, " ")))
 }
 
 // IsRepoDirty checks if there are any uncommitted changes in the repository.
@@ -110,13 +104,20 @@ func (g *Wrapper) Commit(ctx context.Context, message string) error {
 	cmd := exec.CommandContext(ctx, g.gitBin, "commit", "--file=-")
 	cmd.Dir = g.dir
 	cmd.Stdin = strings.NewReader(message)
+	// Log flags only; omit the message body to avoid leaking sensitive content.
+	slog.Info("git", "args", []string{"commit", "--file=-"})
+	return runWithCapture(cmd, "git commit")
+}
+
+// runWithCapture tees stdout/stderr to the parent process and a buffer so
+// failures can include git's own message (often on stdout, not only stderr).
+// Shared by Exec and Commit — both previously inlined the same MultiWriter setup.
+func runWithCapture(cmd *exec.Cmd, op string) error {
 	var capBuf bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &capBuf)
 	cmd.Stderr = io.MultiWriter(os.Stderr, &capBuf)
-	// Log flags only; omit the message body to avoid leaking sensitive content.
-	slog.Info("git", "args", []string{"commit", "--file=-"})
 	if err := cmd.Run(); err != nil {
-		return wrapGitErr("git commit", err, capBuf.String())
+		return wrapGitErr(op, err, capBuf.String())
 	}
 	return nil
 }
