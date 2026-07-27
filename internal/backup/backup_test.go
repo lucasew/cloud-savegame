@@ -377,6 +377,109 @@ func TestSearchForHomesMissingMarkersAreSilent(t *testing.T) {
 	}
 }
 
+// TestBackupItemSurfacesMkdirErrors checks that failure to create __backup__
+// produces WarningNews instead of only a slog line the end-of-run summary
+// would miss (important for --backlink when preserving the original path).
+func TestBackupItemSurfacesMkdirErrors(t *testing.T) {
+	// outputDir is a regular file: MkdirAll(__backup__) under it must fail.
+	outFile := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(outFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	item := filepath.Join(t.TempDir(), "original.dat")
+	if err := os.WriteFile(item, []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	eng := backup.NewEngine(config.New(), nil, nil, outFile)
+	eng.BackupItem(item, outFile)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when BackupItem cannot create __backup__")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "Failed to create backup directory") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, item) {
+		t.Fatalf("warning should mention item %s: %s", item, msg)
+	}
+	// Original must still exist (move never happened).
+	if _, err := os.Stat(item); err != nil {
+		t.Fatalf("original should remain when backup dir creation fails: %v", err)
+	}
+}
+
+// TestBackupItemSurfacesRenameErrors checks that a failed move into __backup__
+// produces WarningNews instead of only a slog line.
+func TestBackupItemSurfacesRenameErrors(t *testing.T) {
+	outDir := t.TempDir()
+	// Source under an unreadable parent: Rename fails after __backup__ exists.
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blocked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	item := filepath.Join(blocked, "original.dat")
+	if err := os.WriteFile(item, []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Drop execute on parent so rename of the child fails on typical Unix.
+	if err := os.Chmod(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+
+	// Preflight: Rename must actually fail on this platform.
+	probeTarget := filepath.Join(outDir, "probe")
+	if err := os.Rename(item, probeTarget); err == nil {
+		_ = os.Rename(probeTarget, item)
+		t.Skip("rename succeeded despite blocked parent; cannot exercise rename failure")
+	}
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.BackupItem(item, outDir)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when BackupItem cannot rename item")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "Failed to move") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, item) {
+		t.Fatalf("warning should mention item %s: %s", item, msg)
+	}
+}
+
+// TestBackupItemSuccessReportsMove checks the intentional news line on success.
+func TestBackupItemSuccessReportsMove(t *testing.T) {
+	outDir := t.TempDir()
+	item := filepath.Join(t.TempDir(), "original.dat")
+	if err := os.WriteFile(item, []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.BackupItem(item, outDir)
+
+	if len(eng.NewsList) != 1 {
+		t.Fatalf("expected one news entry on success, got %v", eng.NewsList)
+	}
+	if !strings.Contains(eng.NewsList[0], "Moved potentially conflicting item") {
+		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
+	}
+	if _, err := os.Stat(item); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("original should have been moved, still at %s: %v", item, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(outDir, "__backup__"))
+	if err != nil {
+		t.Fatalf("backup dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one backup file, got %v", entries)
+	}
+}
+
 // TestCopyItemSurfacesCopyErrors checks that a failed file copy produces
 // WarningNews instead of only a slog line the end-of-run summary would miss.
 func TestCopyItemSurfacesCopyErrors(t *testing.T) {
