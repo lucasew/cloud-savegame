@@ -522,3 +522,75 @@ func TestCopyItemSurfacesCopyErrors(t *testing.T) {
 		t.Fatalf("warning should mention dest %s: %s", dest, msg)
 	}
 }
+
+// TestCopyItemSurfacesDirMkdirErrors checks that failure to create the
+// destination directory produces WarningNews instead of only a slog line.
+func TestCopyItemSurfacesDirMkdirErrors(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "saves")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "slot1.dat"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := t.TempDir()
+	// Destination parent is a regular file: MkdirAll(destination) must fail.
+	blocker := filepath.Join(outDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(blocker, "saves")
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(src, dest, outDir, 0)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when CopyItem cannot mkdir destination dir")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "Failed to create destination directory") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, dest) {
+		t.Fatalf("warning should mention dest %s: %s", dest, msg)
+	}
+	if !strings.Contains(msg, src) {
+		t.Fatalf("warning should mention source %s: %s", src, msg)
+	}
+}
+
+// TestCopyItemSurfacesFileParentMkdirErrors checks that failure to create
+// a file destination's parent produces WarningNews instead of only a slog line.
+func TestCopyItemSurfacesFileParentMkdirErrors(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "save.dat")
+	if err := os.WriteFile(src, []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := t.TempDir()
+	// Parent path is a regular file: MkdirAll(Dir(dest)) must fail.
+	blocker := filepath.Join(outDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(blocker, "nested", "save.dat")
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.CopyItem(src, dest, outDir, 0)
+
+	if len(eng.NewsList) == 0 {
+		t.Fatal("expected WarningNews when CopyItem cannot mkdir destination parent")
+	}
+	msg := eng.NewsList[0]
+	if !strings.Contains(msg, "Failed to create destination parent") {
+		t.Fatalf("unexpected warning: %s", msg)
+	}
+	if !strings.Contains(msg, src) {
+		t.Fatalf("warning should mention source %s: %s", src, msg)
+	}
+	parent := filepath.Dir(dest)
+	if !strings.Contains(msg, parent) {
+		t.Fatalf("warning should mention parent %s: %s", parent, msg)
+	}
+}
