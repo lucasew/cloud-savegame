@@ -102,7 +102,7 @@ func expandPath(path string) string {
 		return path
 	}
 	// Bare "~", or "~" plus a path separator and optional rest.
-	if len(path) > 1 && path[1] != '/' && path[1] != '\\' {
+	if len(path) > 1 && !os.IsPathSeparator(path[1]) {
 		return path
 	}
 	dirname, err := os.UserHomeDir()
