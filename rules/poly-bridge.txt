@@ -1,1 +1,6 @@
+progress $appdata/LocalLow/Dry Cactus/Poly Bridge/progress.bytes
+progress $home/.config/unity3d/Dry Cactus/Poly Bridge/progress.bytes
+savefiles $appdata/LocalLow/Dry Cactus/Poly Bridge/savefiles/
+savefiles $home/.config/unity3d/Dry Cactus/Poly Bridge/savefiles/
+prefs $home/.config/unity3d/Dry Cactus/Poly Bridge/prefs
 data $appdata/Roaming/SmartSteamEmu/367450
