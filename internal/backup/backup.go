@@ -90,17 +90,28 @@ func (e *Engine) IsPathIgnored(path string) bool {
 
 // BackupItem moves an item to a timestamped backup directory within the output directory.
 // This is used to preserve existing files that would otherwise be overwritten or lost during operations.
+// Failures are reported via WarningNews so end-of-run summaries do not look clean when
+// a conflicting original could not be preserved (e.g. during --backlink).
 func (e *Engine) BackupItem(item, outputDir string) {
 	backupDir := filepath.Join(outputDir, "__backup__")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		// Previously only slog.Error: failed backup dirs never appeared in the
+		// end-of-run NewsList, so a blocked __backup__ looked like a clean run.
 		slog.Error("failed to create backup dir", "path", backupDir, "error", err)
+		e.WarningNews(fmt.Sprintf(
+			"Failed to create backup directory '%s' while preserving '%s': %v",
+			backupDir, item, err))
 		return
 	}
 	name := filepath.Base(item)
 	backupTarget := filepath.Join(backupDir, fmt.Sprintf("%s.%d", name, time.Now().Unix()))
 
 	if err := os.Rename(item, backupTarget); err != nil {
+		// Previously only slog.Error: a failed move left the original in place
+		// with no NewsList entry, while backlink would still try to symlink.
 		slog.Error("failed to move item to backup", "item", item, "target", backupTarget, "error", err)
+		e.WarningNews(fmt.Sprintf(
+			"Failed to move '%s' to backup at '%s': %v", item, backupTarget, err))
 		return
 	}
 	slog.Info("Moved item to backup", "item", item, "target", backupTarget)
