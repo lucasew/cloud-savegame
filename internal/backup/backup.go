@@ -166,7 +166,13 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 
 	if info.IsDir() {
 		if err := os.MkdirAll(destination, 0755); err != nil {
+			// Previously only slog.Error: a blocked destination tree never
+			// appeared in the end-of-run NewsList, so a failed mkdir looked
+			// like a clean skip for that directory.
 			slog.Error("failed to mkdir", "path", destination, "error", err)
+			e.WarningNews(fmt.Sprintf(
+				"Failed to create destination directory '%s' while copying '%s': %v",
+				destination, inputItem, err))
 			return
 		}
 		entries, err := os.ReadDir(inputItem)
@@ -198,8 +204,14 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 			}
 		}
 
-		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
-			slog.Error("failed to mkdir parent", "path", filepath.Dir(destination), "error", err)
+		destParent := filepath.Dir(destination)
+		if err := os.MkdirAll(destParent, 0755); err != nil {
+			// Previously only slog.Error: failed parent creation never appeared
+			// in NewsList, so the end-of-run summary looked clean.
+			slog.Error("failed to mkdir parent", "path", destParent, "error", err)
+			e.WarningNews(fmt.Sprintf(
+				"Failed to create destination parent '%s' while copying '%s': %v",
+				destParent, inputItem, err))
 			return
 		}
 
