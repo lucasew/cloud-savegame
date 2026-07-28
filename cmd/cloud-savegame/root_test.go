@@ -54,7 +54,7 @@ func TestPathStatProblemInaccessible(t *testing.T) {
 	t.Parallel()
 	// Synthetic non-IsNotExist error (permission-style) must not use the
 	// "does not exist" wording and must keep the path skipped by callers.
-	err := errors.New("permission denied")
+	err := fs.ErrPermission
 	secretHome := filepath.Join(t.TempDir(), "secret-home")
 	msg := pathStatProblem("extra home", secretHome, err)
 	if strings.Contains(msg, "does not exist") {
@@ -137,7 +137,7 @@ func TestPathStatProblemProgramFilesParent(t *testing.T) {
 // for documents / Common Files / Ubisoft probes (inaccessible, not missing).
 func TestPathStatProblemHomeDiscoveryProbes(t *testing.T) {
 	t.Parallel()
-	err := errors.New("permission denied")
+	err := fs.ErrPermission
 	cases := []struct {
 		label string
 		path  string

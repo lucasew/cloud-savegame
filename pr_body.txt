@@ -1,0 +1,15 @@
+This PR replaces synthetic `errors.New("permission denied")` errors with standard `fs.ErrPermission` in tests, improving idiomatic Go usage.
+
+## Assumptions
+- The tests utilizing these mocked permission errors are testing against file system boundaries, where standard library consumers would expect `fs.ErrPermission`.
+- Using a raw string match for "does not exist" or skipping paths on permission issues functions identically for `fs.ErrPermission` as it did for `errors.New("permission denied")`.
+
+## Alternatives Not Chosen
+- Continuing to use `errors.New("permission denied")`. This was rejected because if the application ever starts using `errors.Is(err, fs.ErrPermission)`, these tests would falsely fail.
+
+## How To Pivot
+- If `fs.ErrPermission` fails checks on certain platforms (e.g. windows syscalls map differently), this PR can be easily reverted and we can look for the specific `syscall` error.
+
+## Next Knobs
+1. Investigate other usages of `errors.New()` that might shadow standard library sentinels.
+2. Ensure `pathStatProblem` correctly unwraps errors when verifying error types.
