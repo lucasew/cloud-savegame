@@ -78,8 +78,10 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if _, err := os.Stat(cfgFile); errors.Is(err, fs.ErrNotExist) {
-		slog.Error("Configuration file is not actually a file", "path", cfgFile)
+	if err := validateConfigFile(cfgFile); err != nil {
+		// Previously only IsNotExist exited, with a "not a file" message; permission
+		// failures and directories fell through to a confusing Load failure.
+		slog.Error("invalid configuration file", "path", cfgFile, "error", err)
 		os.Exit(1)
 	}
 
@@ -88,11 +90,11 @@ func run(cmd *cobra.Command, args []string) {
 		slog.Error("failed to get absolute path for output dir", "error", err)
 		os.Exit(1)
 	}
-	if _, err := os.Stat(outPath); errors.Is(err, fs.ErrNotExist) {
-		if err := os.MkdirAll(outPath, 0755); err != nil {
-			slog.Error("Failed to create output dir", "error", err)
-			os.Exit(1)
-		}
+	if err := ensureOutputDir(outPath); err != nil {
+		// Previously only IsNotExist triggered MkdirAll; inaccessible paths and
+		// existing non-directories continued into later ops with no early error.
+		slog.Error("invalid output path", "path", outPath, "error", err)
+		os.Exit(1)
 	}
 
 	cfg := config.New()
@@ -411,6 +413,41 @@ func pathStatProblem(label, path string, err error) string {
 		return fmt.Sprintf("%s does not exist: %s", label, path)
 	}
 	return fmt.Sprintf("%s is inaccessible: %s: %v", label, path, err)
+}
+
+// validateConfigFile ensures path exists, is accessible, and is not a directory.
+// Permission / other Stat failures must not fall through to Load.
+func validateConfigFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("configuration file does not exist: %s", path)
+		}
+		return fmt.Errorf("configuration file is inaccessible: %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("configuration file is not a file: %s", path)
+	}
+	return nil
+}
+
+// ensureOutputDir creates path when missing, or verifies it is an accessible directory.
+// Permission failures and existing non-directories must not look like a usable output root.
+func ensureOutputDir(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			if err := os.MkdirAll(path, 0755); err != nil {
+				return fmt.Errorf("failed to create output dir %s: %w", path, err)
+			}
+			return nil
+		}
+		return fmt.Errorf("output path is inaccessible: %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output path is not a directory: %s", path)
+	}
+	return nil
 }
 
 // listSubdirNames returns the names of immediate child directories under dir.
