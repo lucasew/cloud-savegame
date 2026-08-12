@@ -372,7 +372,12 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 			slog.Debug("TOPLEVEL backlink", "app", app, "rule", ruleName, "path", pathStr)
 			parent := filepath.Dir(pathStr)
 			if err := os.MkdirAll(parent, 0755); err != nil {
+				// Previously only slog.Error: failed parent creation for --backlink
+				// never appeared in NewsList, so a blocked origin path looked clean.
 				slog.Error("failed to mkdir parent for backlink", "error", err)
+				e.WarningNews(fmt.Sprintf(
+					"Failed to create parent directory '%s' for backlink of '%s': %v",
+					parent, pathStr, err))
 			}
 
 			info, err := os.Lstat(pathStr)
@@ -381,7 +386,12 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 
 			if isSymlink {
 				if err := os.Remove(pathStr); err != nil {
+					// Previously only slog.Error: a stuck old symlink blocked the
+					// new backlink with no end-of-run NewsList entry.
 					slog.Error("failed to remove symlink", "path", pathStr, "error", err)
+					e.WarningNews(fmt.Sprintf(
+						"Failed to remove existing symlink '%s' before backlink: %v",
+						pathStr, err))
 				}
 			} else if exists {
 				e.BackupItem(pathStr, e.OutputDir)
@@ -389,7 +399,12 @@ func (e *Engine) IngestPath(ctx context.Context, app, ruleName, pathStr string, 
 
 			slog.Info("ln", "src", pathStr, "target", outputDir)
 			if err := os.Symlink(outputDir, pathStr); err != nil {
+				// Previously only slog.Error: --backlink failures never appeared
+				// in NewsList, so a run that left no origin symlink looked clean.
 				slog.Error("failed to create symlink", "src", outputDir, "dst", pathStr, "error", err)
+				e.WarningNews(fmt.Sprintf(
+					"Failed to create backlink from '%s' to '%s': %v",
+					pathStr, outputDir, err))
 			}
 		}
 
