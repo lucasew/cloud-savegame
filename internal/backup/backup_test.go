@@ -594,3 +594,75 @@ func TestCopyItemSurfacesFileParentMkdirErrors(t *testing.T) {
 		t.Fatalf("warning should mention parent %s: %s", parent, msg)
 	}
 }
+
+// TestIngestPathBacklinkSurfacesMkdirErrors checks that failure to create the
+// origin parent for --backlink produces WarningNews instead of only a slog line.
+func TestIngestPathBacklinkSurfacesMkdirErrors(t *testing.T) {
+	outDir := t.TempDir()
+	base := t.TempDir()
+	// pathStr's parent is a regular file: MkdirAll(parent) must fail.
+	blocker := filepath.Join(base, "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pathStr := filepath.Join(blocker, "nested", "save.dat")
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.Backlink = true
+	// basePath required so absolute pathStr is not rejected by security checks.
+	// topLevel=true exercises backlink even when the origin path is missing.
+	eng.IngestPath(t.Context(), "app", "rule", pathStr, true, base)
+
+	foundMkdir := false
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "Failed to create parent directory") && strings.Contains(msg, pathStr) {
+			foundMkdir = true
+			break
+		}
+	}
+	if !foundMkdir {
+		t.Fatalf("expected WarningNews about backlink parent mkdir; got %v", eng.NewsList)
+	}
+}
+
+// TestIngestPathBacklinkSurfacesSymlinkErrors checks that a failed os.Symlink
+// during --backlink produces WarningNews instead of only a slog line.
+func TestIngestPathBacklinkSurfacesSymlinkErrors(t *testing.T) {
+	outDir := t.TempDir()
+	base := t.TempDir()
+	// Parent is read-only so Symlink into it fails after MkdirAll is a no-op
+	// (parent already exists).
+	parent := filepath.Join(base, "origin-parent")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pathStr := filepath.Join(parent, "save.dat")
+	if err := os.Chmod(parent, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+
+	// Preflight: Symlink must actually fail on this platform (not root).
+	if err := os.Symlink(outDir, pathStr); err == nil {
+		_ = os.Remove(pathStr)
+		t.Skip("symlink succeeded on read-only parent; cannot exercise failure")
+	}
+
+	eng := backup.NewEngine(config.New(), nil, nil, outDir)
+	eng.Backlink = true
+	eng.IngestPath(t.Context(), "app", "rule", pathStr, true, base)
+
+	linkTarget := filepath.Join(outDir, "app", "rule")
+	found := false
+	for _, msg := range eng.NewsList {
+		if strings.Contains(msg, "Failed to create backlink") &&
+			strings.Contains(msg, pathStr) &&
+			strings.Contains(msg, linkTarget) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected WarningNews about backlink symlink failure; got %v", eng.NewsList)
+	}
+}
