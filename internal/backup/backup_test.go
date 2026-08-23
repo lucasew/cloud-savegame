@@ -79,6 +79,43 @@ func withDeletedCWD(t *testing.T, fn func()) {
 	fn()
 }
 
+// unreadableDir creates a mode-000 directory and restores permissions on cleanup.
+func unreadableDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(dir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Errorf("restore perms %s: %v", dir, err)
+		}
+	})
+	return dir
+}
+
+// skipUnlessInaccessible skips when err is nil or NotExist so permission-only
+// cases are not asserted on platforms that cannot produce them.
+func skipUnlessInaccessible(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Skip("path is accessible; cannot exercise inaccessible case")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
+	}
+}
+
+// fileBlocker writes a regular file used as a path component so MkdirAll under it fails.
+func fileBlocker(t *testing.T, dir string) string {
+	t.Helper()
+	p := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(p, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
 	// Security checks must not be skipped when filepath.Abs cannot resolve.
 	outDir := t.TempDir()
@@ -100,19 +137,10 @@ func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
 // for a reason other than NotExist produces WarningNews instead of looking
 // like "nothing to copy".
 func TestCopyItemSurfacesLstatErrors(t *testing.T) {
-	blocked := filepath.Join(t.TempDir(), "blocked")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
 	// Child under an unreadable parent: Lstat fails with permission (not NotExist).
-	secret := filepath.Join(blocked, "save.dat")
-	if _, err := os.Lstat(secret); err == nil {
-		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
-	} else if errors.Is(err, fs.ErrNotExist) {
-		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
-	}
+	secret := filepath.Join(unreadableDir(t), "save.dat")
+	_, err := os.Lstat(secret)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	dest := filepath.Join(outDir, "app", "rule", "save.dat")
@@ -148,17 +176,9 @@ func TestCopyItemMissingPathIsSilent(t *testing.T) {
 // TestCopyItemSurfacesReadDirErrors checks that a directory whose contents
 // cannot be listed produces WarningNews instead of a silent partial copy.
 func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
-	srcRoot := t.TempDir()
-	blocked := filepath.Join(srcRoot, "blocked")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
-	// If we can still read the dir (e.g. running as root), skip.
-	if _, err := os.ReadDir(blocked); err == nil {
-		t.Skip("directory is readable; cannot exercise ReadDir failure")
-	}
+	blocked := unreadableDir(t)
+	_, err := os.ReadDir(blocked)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	dest := filepath.Join(outDir, "app", "rule")
@@ -180,19 +200,11 @@ func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
 // whose Stat fails for a reason other than NotExist produces WarningNews
 // instead of looking like "game not installed".
 func TestIngestPathSurfacesInaccessibleStat(t *testing.T) {
-	blocked := filepath.Join(t.TempDir(), "blocked")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
 	// Child under an unreadable parent: Stat fails with permission (not NotExist).
+	blocked := unreadableDir(t)
 	secret := filepath.Join(blocked, "save.dat")
-	if _, err := os.Stat(secret); err == nil {
-		t.Skip("path is stat-able; cannot exercise inaccessible Stat")
-	} else if errors.Is(err, fs.ErrNotExist) {
-		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
-	}
+	_, err := os.Stat(secret)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
@@ -234,16 +246,9 @@ func TestIngestPathMissingPathIsSilent(t *testing.T) {
 // contents cannot be listed produces WarningNews instead of looking like
 // "no homes under this path".
 func TestSearchForHomesSurfacesReadDirErrors(t *testing.T) {
-	blocked := filepath.Join(t.TempDir(), "blocked")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
-	// If we can still read the dir (e.g. running as root), skip.
-	if _, err := os.ReadDir(blocked); err == nil {
-		t.Skip("directory is readable; cannot exercise ReadDir failure")
-	}
+	blocked := unreadableDir(t)
+	_, err := os.ReadDir(blocked)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
@@ -267,19 +272,10 @@ func TestSearchForHomesSurfacesReadDirErrors(t *testing.T) {
 // Lstat fails for a reason other than NotExist produces WarningNews instead
 // of looking like "no homes here".
 func TestSearchForHomesSurfacesLstatErrors(t *testing.T) {
-	blocked := filepath.Join(t.TempDir(), "blocked")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
 	// Child under an unreadable parent: Lstat fails with permission (not NotExist).
-	secret := filepath.Join(blocked, "nested-home")
-	if _, err := os.Lstat(secret); err == nil {
-		t.Skip("path is lstat-able; cannot exercise inaccessible Lstat")
-	} else if errors.Is(err, fs.ErrNotExist) {
-		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
-	}
+	secret := filepath.Join(unreadableDir(t), "nested-home")
+	_, err := os.Lstat(secret)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
@@ -323,19 +319,10 @@ func TestSearchForHomesMissingPathIsSilent(t *testing.T) {
 func TestSearchForHomesSurfacesMarkerStatErrors(t *testing.T) {
 	// Unreadable directory: Lstat of the dir itself succeeds, but Stat of
 	// children (.config / AppData) fails with permission denied.
-	blocked := filepath.Join(t.TempDir(), "blocked-home")
-	if err := os.Mkdir(blocked, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
-
+	blocked := unreadableDir(t)
 	marker := filepath.Join(blocked, ".config")
-	if _, err := os.Stat(marker); err == nil {
-		t.Skip("marker is stat-able; cannot exercise inaccessible marker Stat")
-	} else if errors.Is(err, fs.ErrNotExist) {
-		// Some platforms report NotExist when the parent is unreadable.
-		t.Skip("platform reports NotExist for unreadable parent; cannot exercise")
-	}
+	_, err := os.Stat(marker)
+	skipUnlessInaccessible(t, err)
 
 	outDir := t.TempDir()
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
@@ -536,11 +523,7 @@ func TestCopyItemSurfacesDirMkdirErrors(t *testing.T) {
 
 	outDir := t.TempDir()
 	// Destination parent is a regular file: MkdirAll(destination) must fail.
-	blocker := filepath.Join(outDir, "blocker")
-	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	dest := filepath.Join(blocker, "saves")
+	dest := filepath.Join(fileBlocker(t, outDir), "saves")
 
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(src, dest, outDir, 0)
@@ -570,11 +553,7 @@ func TestCopyItemSurfacesFileParentMkdirErrors(t *testing.T) {
 
 	outDir := t.TempDir()
 	// Parent path is a regular file: MkdirAll(Dir(dest)) must fail.
-	blocker := filepath.Join(outDir, "blocker")
-	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	dest := filepath.Join(blocker, "nested", "save.dat")
+	dest := filepath.Join(fileBlocker(t, outDir), "nested", "save.dat")
 
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(src, dest, outDir, 0)
@@ -601,11 +580,7 @@ func TestIngestPathBacklinkSurfacesMkdirErrors(t *testing.T) {
 	outDir := t.TempDir()
 	base := t.TempDir()
 	// pathStr's parent is a regular file: MkdirAll(parent) must fail.
-	blocker := filepath.Join(base, "blocker")
-	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	pathStr := filepath.Join(blocker, "nested", "save.dat")
+	pathStr := filepath.Join(fileBlocker(t, base), "nested", "save.dat")
 
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.Backlink = true
