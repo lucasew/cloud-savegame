@@ -1,0 +1,3 @@
+options $documents/My Games/Binding of Isaac Afterbirth/options.ini
+inputconfigs $documents/My Games/Binding of Isaac Afterbirth/inputconfigs.dat
+saves $documents/My Games/Binding of Isaac Afterbirth/*.ab_persistentgamedata*

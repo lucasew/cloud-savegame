@@ -1,0 +1,6 @@
+editor $documents/American Truck Simulator/editor/
+mods $documents/American Truck Simulator/mod/
+saves $documents/American Truck Simulator/profiles/
+steam_saves $documents/American Truck Simulator/steam_profiles/
+screenshots $documents/American Truck Simulator/screenshot/
+config $documents/American Truck Simulator/config.cfg

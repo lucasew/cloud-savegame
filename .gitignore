@@ -1,0 +1,22 @@
+# Go
+cloud-savegame
+cloud_savegame
+cloud-savegame.exe
+cloud_savegame.exe
+*.exe
+*.test
+*.out
+go.work
+
+# Python artifacts (legacy but good to keep for cleanup)
+__pycache__
+.ruff_cache
+.pytest_cache
+dist/
+*.egg-info
+build/
+.venv/
+
+# Project specific
+output/
+result

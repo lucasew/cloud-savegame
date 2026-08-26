@@ -1,0 +1,4 @@
+screenshots $documents/GTA San Andreas User Files/Gallery/
+saves $documents/GTA San Andreas User Files/GTASAsf*
+samp_serverlist $documents/GTA San Andreas User Files/SAMP/userdata.dat
+

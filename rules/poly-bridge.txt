@@ -1,0 +1,1 @@
+data $appdata/Roaming/SmartSteamEmu/367450

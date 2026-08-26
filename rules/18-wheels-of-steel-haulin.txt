@@ -1,0 +1,3 @@
+mods $documents/18 WoS Haulin/mod/
+save $documents/18 WoS Haulin/save/
+config $documents/18 WoS Haulin/config.cfg

@@ -1,0 +1,17 @@
+{
+  "incremental": true,
+  "includes": ["**/*"],
+  "excludes": [
+    "**/node_modules",
+    "**/target",
+    "**/dist",
+    "**/build",
+    "uv.lock",
+    ".venv"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/markdown-0.17.8.wasm",
+    "https://plugins.dprint.dev/json-0.19.3.wasm",
+    "https://plugins.dprint.dev/toml-0.6.2.wasm"
+  ]
+}
