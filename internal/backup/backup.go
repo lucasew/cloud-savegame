@@ -227,25 +227,23 @@ func (e *Engine) CopyItem(inputItem, destination, outputDir string, depth int) {
 	}
 }
 
+func closeLogged(c io.Closer, label string) {
+	if err := c.Close(); err != nil {
+		slog.Error("failed to close "+label, "error", err)
+	}
+}
+
 func copyFile(src, dst string) error {
 	s, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := s.Close(); err != nil {
-			slog.Error("failed to close src", "error", err)
-		}
-	}()
+	defer closeLogged(s, "src")
 	d, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := d.Close(); err != nil {
-			slog.Error("failed to close dst", "error", err)
-		}
-	}()
+	defer closeLogged(d, "dst")
 	_, err = io.Copy(d, s)
 	return err
 }
