@@ -1,0 +1,5 @@
+maps $documents/18 WoS Pedal to the Metal/maps
+saves $documents/18 WoS Pedal to the Metal/saves
+screenshots $documents/18 WoS Pedal to the Metal/screenshots/
+config $documents/18 WoS Pedal to the Metal/config.cfg
+controls $documents/18 WoS Pedal to the Metal/controls.def

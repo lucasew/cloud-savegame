@@ -1,0 +1,6 @@
+mods $documents/My Games/FarmingSimulator2013/mods/
+saves $documents/My Games/FarmingSimulator2013/savegame*
+screenshots $documents/My Games/FarmingSimulator2013/screenshots/
+game_settings $documents/My Games/FarmingSimulator2013/gameSettings.xml
+input_settings $documents/My Games/FarmingSimulator2013/inputBinding.xml
+

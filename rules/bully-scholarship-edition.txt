@@ -1,0 +1,2 @@
+saves $documents/Bully Scholarship Edition/BullyFile*
+saves $documents/Bully Scholarship Edition/FileTableBully

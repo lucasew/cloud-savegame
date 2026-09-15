@@ -1,0 +1,2 @@
+savestates $documents/Mesen/SaveStates/
+settings $documents/Mesen/settings.xml

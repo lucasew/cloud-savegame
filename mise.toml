@@ -1,0 +1,53 @@
+[tools]
+dprint = "0.51.1"
+go = "1.25.7"
+golangci-lint = "2.8.0"
+"go:github.com/spf13/cobra-cli" = "1.3.0"
+
+[tasks.install]
+run = "go mod download"
+description = "Install dependencies"
+
+[tasks.codegen]
+run = "echo \"No codegen needed\""
+description = "Update generated code"
+
+[tasks.build]
+run = "go build -o cloud_savegame ./cmd/cloud-savegame"
+description = "Build binary"
+
+[tasks."lint:go"]
+run = "golangci-lint run"
+description = "Lint Go files"
+
+[tasks."lint:dprint"]
+run = "dprint check"
+description = "Lint files with dprint"
+
+[tasks."fmt:go"]
+run = "go fmt ./..."
+description = "Format Go files"
+
+[tasks."fmt:dprint"]
+run = "dprint fmt"
+description = "Format files with dprint"
+
+[tasks."fmt:nix"]
+run = "nixfmt *.nix || true"
+description = "Format Nix files"
+
+[tasks.lint]
+depends = ["lint:*"]
+description = "Run all linters"
+
+[tasks.fmt]
+depends = ["fmt:*"]
+description = "Run all formatters"
+
+[tasks.test]
+run = "go test ./..."
+description = "Run tests"
+
+[tasks.ci]
+depends = ["lint", "test", "build"]
+description = "Run CI checks"
