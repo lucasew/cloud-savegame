@@ -116,6 +116,40 @@ func fileBlocker(t *testing.T, dir string) string {
 	return p
 }
 
+type newsCheck struct {
+	t    *testing.T
+	news []string
+}
+
+func checkNews(t *testing.T, news []string) newsCheck {
+	t.Helper()
+	return newsCheck{t: t, news: news}
+}
+
+// firstHas fails unless the first news entry exists and contains every part.
+func (c newsCheck) firstHas(emptyMsg string, parts ...string) {
+	c.t.Helper()
+	if len(c.news) == 0 {
+		c.t.Fatal(emptyMsg)
+	}
+	msg := c.news[0]
+	for _, part := range parts {
+		if !strings.Contains(msg, part) {
+			c.t.Fatalf("warning %q does not contain %q", msg, part)
+		}
+	}
+}
+
+// forbids fails if any news entry contains part.
+func (c newsCheck) forbids(part, why string) {
+	c.t.Helper()
+	for _, msg := range c.news {
+		if strings.Contains(msg, part) {
+			c.t.Fatalf("%s: %s", why, msg)
+		}
+	}
+}
+
 func TestIngestPathFailsClosedWhenAbsFails(t *testing.T) {
 	// Security checks must not be skipped when filepath.Abs cannot resolve.
 	outDir := t.TempDir()
@@ -147,15 +181,9 @@ func TestCopyItemSurfacesLstatErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(secret, dest, outDir, 0)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when CopyItem cannot Lstat source")
-	}
-	if !strings.Contains(eng.NewsList[0], "Failed to access path") {
-		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
-	}
-	if !strings.Contains(eng.NewsList[0], secret) {
-		t.Fatalf("warning should mention path %s: %s", secret, eng.NewsList[0])
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when CopyItem cannot Lstat source",
+		"Failed to access path", secret)
 }
 
 // TestCopyItemMissingPathIsSilent checks that a missing source does not warn.
@@ -166,11 +194,7 @@ func TestCopyItemMissingPathIsSilent(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(missing, dest, outDir, 0)
 
-	for _, msg := range eng.NewsList {
-		if strings.Contains(msg, "Failed to access path") {
-			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
-		}
-	}
+	checkNews(t, eng.NewsList).forbids("Failed to access path", "missing path must not warn as inaccessible")
 }
 
 // TestCopyItemSurfacesReadDirErrors checks that a directory whose contents
@@ -185,15 +209,9 @@ func TestCopyItemSurfacesReadDirErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(blocked, dest, outDir, 0)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when CopyItem cannot ReadDir source")
-	}
-	if !strings.Contains(eng.NewsList[0], "Failed to list directory") {
-		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
-	}
-	if !strings.Contains(eng.NewsList[0], blocked) {
-		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when CopyItem cannot ReadDir source",
+		"Failed to list directory", blocked)
 }
 
 // TestIngestPathSurfacesInaccessibleStat checks that a concrete rule path
@@ -211,19 +229,9 @@ func TestIngestPathSurfacesInaccessibleStat(t *testing.T) {
 	// basePath empty would reject absolute pathStr; pass base so security allows it.
 	eng.IngestPath(t.Context(), "test-app", "saves", secret, true, blocked)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when IngestPath cannot Stat rule path")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "inaccessible") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, secret) {
-		t.Fatalf("warning should mention path %s: %s", secret, msg)
-	}
-	if !strings.Contains(msg, "test-app") {
-		t.Fatalf("warning should mention app: %s", msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when IngestPath cannot Stat rule path",
+		"inaccessible", secret, "test-app")
 }
 
 // TestIngestPathMissingPathIsSilent checks that a missing concrete path
@@ -235,11 +243,7 @@ func TestIngestPathMissingPathIsSilent(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.IngestPath(t.Context(), "test-app", "saves", missing, true, base)
 
-	for _, msg := range eng.NewsList {
-		if strings.Contains(msg, "inaccessible") {
-			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
-		}
-	}
+	checkNews(t, eng.NewsList).forbids("inaccessible", "missing path must not warn as inaccessible")
 }
 
 // TestSearchForHomesSurfacesReadDirErrors checks that a directory whose
@@ -257,15 +261,9 @@ func TestSearchForHomesSurfacesReadDirErrors(t *testing.T) {
 	if len(homes) != 0 {
 		t.Fatalf("expected no homes from unreadable dir, got %v", homes)
 	}
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when SearchForHomes cannot ReadDir")
-	}
-	if !strings.Contains(eng.NewsList[0], "searching for homes") {
-		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
-	}
-	if !strings.Contains(eng.NewsList[0], blocked) {
-		t.Fatalf("warning should mention path %s: %s", blocked, eng.NewsList[0])
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when SearchForHomes cannot ReadDir",
+		"searching for homes", blocked)
 }
 
 // TestSearchForHomesSurfacesLstatErrors checks that a search start path whose
@@ -284,15 +282,9 @@ func TestSearchForHomesSurfacesLstatErrors(t *testing.T) {
 	if len(homes) != 0 {
 		t.Fatalf("expected no homes from inaccessible path, got %v", homes)
 	}
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when SearchForHomes cannot Lstat start path")
-	}
-	if !strings.Contains(eng.NewsList[0], "Failed to access path") {
-		t.Fatalf("unexpected warning: %s", eng.NewsList[0])
-	}
-	if !strings.Contains(eng.NewsList[0], secret) {
-		t.Fatalf("warning should mention path %s: %s", secret, eng.NewsList[0])
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when SearchForHomes cannot Lstat start path",
+		"Failed to access path", secret)
 }
 
 // TestSearchForHomesMissingPathIsSilent checks that a missing start path does
@@ -306,11 +298,7 @@ func TestSearchForHomesMissingPathIsSilent(t *testing.T) {
 	if len(homes) != 0 {
 		t.Fatalf("expected no homes from missing path, got %v", homes)
 	}
-	for _, msg := range eng.NewsList {
-		if strings.Contains(msg, "Failed to access path") {
-			t.Fatalf("missing path must not warn as inaccessible: %s", msg)
-		}
-	}
+	checkNews(t, eng.NewsList).forbids("Failed to access path", "missing path must not warn as inaccessible")
 }
 
 // TestSearchForHomesSurfacesMarkerStatErrors checks that when .config/AppData
@@ -357,11 +345,7 @@ func TestSearchForHomesMissingMarkersAreSilent(t *testing.T) {
 	if len(homes) != 0 {
 		t.Fatalf("expected no homes without markers, got %v", homes)
 	}
-	for _, msg := range eng.NewsList {
-		if strings.Contains(msg, "home marker") {
-			t.Fatalf("missing markers must not warn: %s", msg)
-		}
-	}
+	checkNews(t, eng.NewsList).forbids("home marker", "missing markers must not warn")
 }
 
 // TestBackupItemSurfacesMkdirErrors checks that failure to create __backup__
@@ -381,16 +365,9 @@ func TestBackupItemSurfacesMkdirErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outFile)
 	eng.BackupItem(item, outFile)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when BackupItem cannot create __backup__")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "Failed to create backup directory") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, item) {
-		t.Fatalf("warning should mention item %s: %s", item, msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when BackupItem cannot create __backup__",
+		"Failed to create backup directory", item)
 	// Original must still exist (move never happened).
 	if _, err := os.Stat(item); err != nil {
 		t.Fatalf("original should remain when backup dir creation fails: %v", err)
@@ -426,16 +403,9 @@ func TestBackupItemSurfacesRenameErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.BackupItem(item, outDir)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when BackupItem cannot rename item")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "Failed to move") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, item) {
-		t.Fatalf("warning should mention item %s: %s", item, msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when BackupItem cannot rename item",
+		"Failed to move", item)
 }
 
 // TestBackupItemSuccessReportsMove checks the intentional news line on success.
@@ -495,19 +465,9 @@ func TestCopyItemSurfacesCopyErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(src, dest, outDir, 0)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when copyFile fails")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "Failed to copy") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, src) {
-		t.Fatalf("warning should mention source %s: %s", src, msg)
-	}
-	if !strings.Contains(msg, dest) {
-		t.Fatalf("warning should mention dest %s: %s", dest, msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when copyFile fails",
+		"Failed to copy", src, dest)
 }
 
 // TestCopyItemSurfacesDirMkdirErrors checks that failure to create the
@@ -528,19 +488,9 @@ func TestCopyItemSurfacesDirMkdirErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(src, dest, outDir, 0)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when CopyItem cannot mkdir destination dir")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "Failed to create destination directory") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, dest) {
-		t.Fatalf("warning should mention dest %s: %s", dest, msg)
-	}
-	if !strings.Contains(msg, src) {
-		t.Fatalf("warning should mention source %s: %s", src, msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when CopyItem cannot mkdir destination dir",
+		"Failed to create destination directory", dest, src)
 }
 
 // TestCopyItemSurfacesFileParentMkdirErrors checks that failure to create
@@ -558,20 +508,9 @@ func TestCopyItemSurfacesFileParentMkdirErrors(t *testing.T) {
 	eng := backup.NewEngine(config.New(), nil, nil, outDir)
 	eng.CopyItem(src, dest, outDir, 0)
 
-	if len(eng.NewsList) == 0 {
-		t.Fatal("expected WarningNews when CopyItem cannot mkdir destination parent")
-	}
-	msg := eng.NewsList[0]
-	if !strings.Contains(msg, "Failed to create destination parent") {
-		t.Fatalf("unexpected warning: %s", msg)
-	}
-	if !strings.Contains(msg, src) {
-		t.Fatalf("warning should mention source %s: %s", src, msg)
-	}
-	parent := filepath.Dir(dest)
-	if !strings.Contains(msg, parent) {
-		t.Fatalf("warning should mention parent %s: %s", parent, msg)
-	}
+	checkNews(t, eng.NewsList).firstHas(
+		"expected WarningNews when CopyItem cannot mkdir destination parent",
+		"Failed to create destination parent", src, filepath.Dir(dest))
 }
 
 // TestIngestPathBacklinkSurfacesMkdirErrors checks that failure to create the
